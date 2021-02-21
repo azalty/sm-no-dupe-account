@@ -14,8 +14,14 @@
 	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
 	"Kicked_PrivatePlaytime"
 	{
-		"en"	"You need to display your playtime publicly. To do this, go to the privacy options of your Steam profile"
-		"fr"	"Vous devez afficher votre temps de jeu publiquement. Pour ce faire, allez dans vos options de confidentialité de votre profil Steam"
+		"en"	"You need to display your profile and your playtime publicly. To do this, go to the privacy options of your Steam profile"
+		"fr"	"Vous devez afficher votre profil et votre temps de jeu publiquement. Pour ce faire, allez dans vos options de confidentialité de votre profil Steam"
+	}
+	
+	"Kicked_PrivateProfile"
+	{
+		"en"	"You need to display your profile publicly. To do this, go to the privacy options of your Steam profile"
+		"fr"	"Vous devez afficher votre profil publiquement. Pour ce faire, allez dans vos options de confidentialité de votre profil Steam"
 	}
 	
 	"Kicked_NotEnoughPlaytime"
@@ -25,6 +31,14 @@
 		"#format"	"{1:t}"
 		"en"		"You must have played CS:GO at least {1} to connect to the server"
 		"fr"		"Vous devez avoir joué au moins {1} à CS:GO pour vous connecter au serveur"
+	}
+	
+	"Kicked_NotEnoughSteamLevel"
+	{
+		// {1} = minimum level required
+		"#format"	"{1:i}"
+		"en"		"You must be at least level {1} on Steam to connect to the server"
+		"fr"		"Vous devez être au moins niveau {1} sur Steam pour vous connecter au serveur"
 	}
 	
 	// Warning, you shouldn't kick for VPNs as these can cause false positives.

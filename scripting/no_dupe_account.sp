@@ -7,13 +7,14 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
 
 bool g_bClientPassedCheck[MAXPLAYERS + 1];
 bool g_bClientPrivatePlaytime[MAXPLAYERS + 1];
+bool g_bClientPrivateLevel[MAXPLAYERS + 1];
 bool g_bVPN[MAXPLAYERS + 1];
 
 bool g_bSteamAPIKeyAvailable;
@@ -35,6 +36,7 @@ ConVar cvarVPN;
 ConVar cvarLevel;
 ConVar cvarPrime;
 ConVar cvarPlaytime;
+ConVar cvarSteamLevel;
 
 ConVar cvarHostname;
 
@@ -55,11 +57,12 @@ public void OnPluginStart()
 	AutoExecConfig_SetCreateFile(true);
 	
 	cvarSteamAPIKey = AutoExecConfig_CreateConVar("nda_steamapi_key", "", "(Requires SteamWorks) A SteamAPI key that will be used to check playtime\nGet your own at: https://steamcommunity.com/dev/apikey\nThis is a sensitive key, don't share it!\nNeeded to get the playtime or prime status", FCVAR_PROTECTED);
-	cvarDiscord = AutoExecConfig_CreateConVar("nda_discord", "", "(Requires Discord API) Discord integration with a webhook\nempty = disabled\nwebhook url = enable", FCVAR_PROTECTED);
+	cvarDiscord = AutoExecConfig_CreateConVar("nda_discord", "", "(Requires Discord API and SteamWorks) Discord integration with a webhook\nempty = disabled\nwebhook url = enable", FCVAR_PROTECTED);
 	cvarVPN = AutoExecConfig_CreateConVar("nda_vpn", "1", "(Requires SteamWorks) 0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
 	cvarLevel = AutoExecConfig_CreateConVar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
 	cvarPrime = AutoExecConfig_CreateConVar("nda_prime", "1", "(Requires SteamWorks) 0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game)");
 	cvarPlaytime = AutoExecConfig_CreateConVar("nda_playtime", "120", "(Requires SteamAPI Key) 0 = disabled\nany integer = is a user check that fails if he has less mins in playtime than asked or has private hours\nany negative integer = same as positive, but is not a check and will kick user");
+	cvarSteamLevel = AutoExecConfig_CreateConVar("nda_steam_level", "5", "(Requires SteamAPI Key) 0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
 	
 	AutoExecConfig_ExecuteFile();
 	AutoExecConfig_CleanFile();
@@ -133,6 +136,17 @@ public void OnConfigsExecuted()
 			LogMessage("WARNING: No SteamAPI Key is configured, but Playtime method is enabled! Playtime requests will NOT work.");
 		}
 	}
+	if (cvarSteamLevel.IntValue > 0)
+	{
+		if (g_bSteamAPIKeyAvailable)
+		{
+			g_iChecks++;
+		}
+		else
+		{
+			LogMessage("WARNING: No SteamAPI Key is configured, but Steam Level method is enabled! Steam Level requests will NOT work.");
+		}
+	}
 }
 
 public void OnAllPluginsLoaded()
@@ -140,13 +154,13 @@ public void OnAllPluginsLoaded()
 	g_bSteamworksExists = LibraryExists("SteamWorks");
 	g_bDiscordExists = LibraryExists("discord-api");
 	
-	if (!g_bSteamworksExists && (cvarVPN.BoolValue || cvarPrime.BoolValue || cvarPlaytime.BoolValue))
+	if (!g_bSteamworksExists && (cvarVPN.BoolValue || cvarPrime.BoolValue || cvarPlaytime.BoolValue || cvarSteamLevel.BoolValue || g_bDiscordAvailable))
 	{
-		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime and Playtime modules will NOT work.");
+		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime, Playtime and Steam Level modules will NOT work.");
 	}
 	if (!g_bDiscordExists && g_bDiscordAvailable)
 	{
-		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime and Playtime modules will NOT work.");
+		LogMessage("WARNING: Your current config requires the Discord API extension, and it is not installed. Discord notifications will NOT work.");
 	}
 }
 
@@ -299,6 +313,7 @@ public Action Command_CheckMePls(int client, int args)
 		g_iClientChecksDone[client] = 0;
 		g_bClientPassedCheck[client] = false;
 		g_bClientPrivatePlaytime[client] = false;
+		g_bClientPrivateLevel[client] = false;
 		g_bVPN[client] = false;
 		OnClientPostAdminCheck(client);
 	}
@@ -310,6 +325,7 @@ public void OnClientDisconnect(int client)
 	g_iClientChecksDone[client] = 0;
 	g_bClientPassedCheck[client] = false;
 	g_bClientPrivatePlaytime[client] = false;
+	g_bClientPrivateLevel[client] = false;
 	g_bVPN[client] = false;
 	delete g_hLevelTimer[client];
 }
@@ -326,26 +342,42 @@ public void OnClientPostAdminCheck(int client)
 	// https://forums.alliedmods.net/showthread.php?t=314780
 	// https://forums.alliedmods.net/showthread.php?p=2617618
 	
-	if (cvarVPN.BoolValue && g_bSteamworksExists)
+	if (g_bSteamworksExists)
 	{
-		char ip[20];
-		GetClientIP(client, ip, sizeof(ip));
-		
-		CheckIP(client, ip);
-	}
-	
-	if (cvarPrime.BoolValue && g_bSteamAPIKeyAvailable && g_bSteamworksExists)
-	{
-		g_iClientChecksDone[client]++;
-		// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
-		if (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense) // if player is paid prime
+		if (cvarVPN.BoolValue)
 		{
-			g_bClientPassedCheck[client] = true;
+			char ip[20];
+			GetClientIP(client, ip, sizeof(ip));
 			
+			CheckIP(client, ip);
 		}
-		else
+		
+		if (g_bSteamAPIKeyAvailable)
 		{
-			ProcessChecks(client);
+			if (cvarPrime.BoolValue)
+			{
+				g_iClientChecksDone[client]++;
+				// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
+				if (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense) // if player is paid prime
+				{
+					g_bClientPassedCheck[client] = true;
+					
+				}
+				else
+				{
+					ProcessChecks(client);
+				}
+			}
+			
+			if (cvarPlaytime.BoolValue)
+			{
+				CheckPlaytime(client);
+			}
+			
+			if (cvarSteamLevel.BoolValue)
+			{
+				CheckSteamLevel(client);
+			}
 		}
 	}
 	
@@ -353,11 +385,6 @@ public void OnClientPostAdminCheck(int client)
 	{
 		// Player level is never available immediately
 		g_hLevelTimer[client] = CreateTimer(3.0, Timer_GetLevel, client, TIMER_REPEAT); // no need to pass userid since OnClientDisconnect() stops the timer
-	}
-	
-	if (cvarPlaytime.BoolValue && g_bSteamAPIKeyAvailable && g_bSteamworksExists)
-	{
-		CheckPlaytime(client);
 	}
 }
 
@@ -476,6 +503,10 @@ void ProcessChecks(int client)
 		{
 			KickClient(client, "%t", "Kicked_PrivatePlaytime");
 		}
+		else if (g_bClientPrivateLevel[client])
+		{
+			KickClient(client, "%t", "Kicked_PrivateProfile");
+		}
 		else
 		{
 			KickClient(client, "%t", "Kicked_FailedChecks");
@@ -491,16 +522,16 @@ void CheckPlaytime(int client)
 	char steamid[64];
 	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
 	char sRequestURL[512];
-	Format(sRequestURL, sizeof(sRequestURL), "http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=%s&include_played_free_games=1&appids_filter[0]=730&steamid=%s&format=json", g_sSteamAPIKey, steamid);
+	Format(sRequestURL, sizeof(sRequestURL), "http://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=%s&include_played_free_games=1&appids_filter[0]=730&steamid=%s", g_sSteamAPIKey, steamid);
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, sRequestURL);
 	
 	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
 	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
-	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckPlayerResponse);
+	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckPlaytimeResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public int OnCheckPlayerResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
@@ -585,6 +616,92 @@ public int OnCheckPlayerResponse(Handle hRequest, bool bFailure, bool bRequestSu
 			{
 				KickClient(client, "%t", "Kicked_NotEnoughPlaytime", "Time_Mins", minutes);
 			}
+		}
+		else
+		{
+			g_iClientChecksDone[client]++;
+			ProcessChecks(client);
+		}
+	}
+	else
+	{
+		g_bClientPassedCheck[client] = true;
+		g_iClientChecksDone[client]++;
+	}
+}
+
+void CheckSteamLevel(int client)
+{
+	char steamid[64];
+	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
+	char sRequestURL[512];
+	Format(sRequestURL, sizeof(sRequestURL), "http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key=%s&steamid=%s", g_sSteamAPIKey, steamid);
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, sRequestURL);
+	
+	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamLevelResponse);
+	SteamWorks_SendHTTPRequest(hRequest);
+}
+
+public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+{
+	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
+	{
+		delete hRequest;
+		return;
+	}
+	
+	int client = GetClientOfUserId(userid);
+	if (!client)
+	{
+		delete hRequest;
+		return;
+	}
+	
+	int iBodySize;
+	SteamWorks_GetHTTPResponseBodySize(hRequest, iBodySize);
+	
+	char[] sBody = new char[iBodySize];
+	SteamWorks_GetHTTPResponseBodyData(hRequest, sBody, iBodySize);
+	
+	delete hRequest;
+	
+	int iSteamLevel = -1;
+	if (ReplaceString(sBody, iBodySize, "\"player_level\":", "") != 0)
+	{
+		ReplaceString(sBody, iBodySize, "\"response\":", "");
+		ReplaceString(sBody, iBodySize, "{", "");
+		ReplaceString(sBody, iBodySize, "}", "");
+		iSteamLevel = StringToInt(sBody);
+	}
+	
+	int requiredLevel = cvarSteamLevel.IntValue;
+	bool kick;
+	if (requiredLevel < 0)
+	{
+		kick = true;
+		requiredLevel = -requiredLevel;
+	}
+	
+	if (requiredLevel == -1)
+	{
+		if (kick)
+		{
+			KickClient(client, "%t", "Kicked_PrivateProfile");
+		}
+		else
+		{
+			g_bClientPrivateLevel[client] = true;
+			g_iClientChecksDone[client]++;
+			ProcessChecks(client);
+		}
+	}
+	else if (iSteamLevel < requiredLevel)
+	{
+		if (kick)
+		{
+			KickClient(client, "%t", "Kicked_NotEnoughSteamLevel", requiredLevel);
 		}
 		else
 		{
