@@ -6,19 +6,19 @@
 	
 	"Kicked_FailedChecks"
 	{
-		"en"	"Your account is too suspicious and recent, try playing more on official game modes!"
+		"fr"	"Votre compte est trop suspect et récent, essayez de jouer plus sur les modes de jeu officiels !"
 	}
 	
 	// If client has failed all his checks and has a private playtime (and playtime is a check), ask them to show it.
 	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
 	"Kicked_PrivatePlaytime"
 	{
-		"en"	"You need to display your profile and your playtime publicly. To do this, go to the privacy options of your Steam profile"
+		"fr"	"Vous devez afficher votre profil et votre temps de jeu publiquement. Pour ce faire, allez dans vos options de confidentialité de votre profil Steam"
 	}
 	
 	"Kicked_PrivateProfile"
 	{
-		"en"	"You need to display your profile publicly. To do this, go to the privacy options of your Steam profile"
+		"fr"	"Vous devez afficher votre profil publiquement. Pour ce faire, allez dans vos options de confidentialité de votre profil Steam"
 	}
 	
 	"Kicked_NotEnoughPlaytime"
@@ -26,14 +26,14 @@
 		// {1} = time formatting, see category 'TIME FORMATTING' below for more info
 		// If you want, you can remove {1} and put your own phrase according to your config
 		"#format"	"{1:t}"
-		"en"		"You must have played CS:GO at least {1} to connect to the server"
+		"fr"		"Vous devez avoir joué au moins {1} à CS:GO pour vous connecter au serveur"
 	}
 	
 	"Kicked_NotEnoughSteamLevel"
 	{
 		// {1} = minimum level required
 		"#format"	"{1:i}"
-		"en"		"You must be at least level {1} on Steam to connect to the server"
+		"fr"		"Vous devez être au moins niveau {1} sur Steam pour vous connecter au serveur"
 	}
 	
 	// Warning, you shouldn't kick for VPNs as these can cause false positives.
@@ -46,17 +46,17 @@
 	// Just set it to 0 or 1 and you should be fine.
 	"Kicked_VPN"
 	{
-		"en"	"Playing on the server with a VPN is forbidden, disable your VPN or your proxy to join the server"
+		"fr"	"Jouer sur le serveur avec un VPN est interdit, désactivez votre VPN ou votre proxy pour rejoindre le serveur"
 	}
 	
 	"Kicked_SteamAccountTooRecent"
 	{
-		"en"	"Your Steam account was created too recently. For security reasons, you cannot connect to the server"
+		"fr"	"Votre compte Steam a été créé trop récemment. Par mesure de sécurité, vous ne pouvez pas vous connecter au serveur"
 	}
 	
 	"Kicked_NoCoin"
 	{
-		"en"	"You must display a coin on your CS:GO profile to connect to the server"
+		"fr"	"Vous devez afficher un badge sur votre profil CS:GO pour vous connecter au serveur"
 	}
 	
 	// ---------------------------------------
@@ -67,36 +67,36 @@
 	{
 		// {1} = playername | {2} = IP
 		"#format"	"{1:s},{2:s}"
-		"en"		"{darkred}[VPN] {blue}Player {darkblue}{1}{blue} seems using a VPN with the IP {red}{2}"
+		"fr"		"{darkred}[VPN] {blue}Le joueur {darkblue}{1}{blue} semble utiliser un VPN avec l'IP {red}{2}"
 	}
 	
 	"Discord_SeemsUsingVPN"
 	{
 		// {client} = playername+link | {1} = IP
 		"#format"	"{1:s}"
-		"en"		"Player {client} seems using a VPN with the IP {1}"
+		"fr"		"Le joueur {client} semble utiliser un VPN avec l'IP {1}"
 	}
 	
 	"Command_VPN_PlayerDisconnected"
 	{
 		// {1} = playername | {2} = IP
 		"#format"	"{1:s},{2:s}"
-		"en"		"{darkred}[VPN] {lightblue}Oops, seems like the player disconnected!"
+		"fr"		"{darkred}[VPN] {lightblue}Oups, il semblerait que le joueur se soit déconnecté !"
 	}
 	
 	"Command_VPN_Title"
 	{
-		"en"	"Players that potentially have a VPN"
+		"fr"	"Joueurs qui ont potentiellement un VPN"
 	}
 	
 	"Command_VPN_Recheck"
 	{
-		"en"	"Recheck player IPs"
+		"fr"	"Revérifier les IPs des joueurs"
 	}
 	
 	"Command_VPN_NoVPN"
 	{
-		"en"	"No player appears to be using a VPN."
+		"fr"	"Aucun joueur ne semble utiliser un VPN."
 	}
 	
 	// -----------------------------------------
@@ -107,26 +107,26 @@
 	{
 		// {1} = playtime in hours | {2} = playtime in minutes
 		"#format"	"{1:i},{2:i}"
-		"en"		"{1} hours and {2} mins"
+		"fr"		"{1} heures et {2} mins"
 	}
 	
 	"Time_Hours"
 	{
 		// {1} = playtime in hours
 		"#format"	"{1:i}"
-		"en"		"{1} hours"
+		"fr"		"{1} heures"
 	}
 	
 	"Time_Hour"
 	{
-		"en"	"1 hour"
+		"fr"	"1 heure"
 	}
 	
 	"Time_Mins"
 	{
 		// {1} = playtime in minutes
 		"#format"	"{1:i}"
-		"en"		"{1} minutes"
+		"fr"		"{1} minutes"
 	}
 	
 	// -------------------------------------------
@@ -135,11 +135,11 @@
 	
 	"Discord_Alert"
 	{
-		"en"	"Alert:"
+		"fr"	"Alerte:"
 	}
 	
 	"Discord_Server"
 	{
-		"en"	"Server:"
+		"fr"	"Serveur:"
 	}
 }
