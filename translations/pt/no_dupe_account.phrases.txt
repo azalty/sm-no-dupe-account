@@ -49,6 +49,16 @@
 		"pt"	"Jogar no servidor com uma VPN é proibido, desabilite sua VPN ou seu proxy para entrar no servidor"
 	}
 	
+	"Kicked_SteamAccountTooRecent"
+	{
+		"pt"	"Sua conta Steam foi criada muito recentemente. Por razões de segurança, você não pode se conectar ao servidor"
+	}
+	
+	"Kicked_NoCoin"
+	{
+		"pt"	"Você deve exibir uma moeda no seu perfil CS:GO para se conectar ao servidor"
+	}
+	
 	// ---------------------------------------
 	// 				VPN MESSAGES
 	// ---------------------------------------
@@ -57,7 +67,7 @@
 	{
 		// {1} = playername | {2} = IP
 		"#format"	"{1:s},{2:s}"
-		"pt"		"{darkred}[VPN] {blue} jogador {darkblue}{1}{blue} parece usar uma VPN com o IP {red}{2}"
+		"pt"		"{darkred}[VPN] {blue}jogador {darkblue}{1}{blue} parece usar uma VPN com o IP {red}{2}"
 	}
 	
 	"Discord_SeemsUsingVPN"
