@@ -165,7 +165,7 @@ public void OnConfigsExecuted()
 		g_bSteamAgeEnabled = true;
 		if (g_bSteamAPIKeyAvailable)
 		{
-			if ((StrContains(g_sSteamAge, "~") == -1) && cvarPlaytime.IntValue > 0)
+			if ((StrContains(g_sSteamAge, "~") == -1) && cvarSteamAge.IntValue > 0)
 			{
 				g_iChecks++;
 			}
