@@ -547,7 +547,7 @@ public int OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 					{
 						if (IsClientInGame(i) && CheckCommandAccess(i, "sm_vpn", ADMFLAG_BAN))
 						{
-							CPrintToChat(client, "%t", "SeemsUsingVPN", playername, ip);
+							CPrintToChat(i, "%t", "SeemsUsingVPN", playername, ip);
 						}
 					}
 					if (g_bDiscordAvailable && g_bDiscordExists)
