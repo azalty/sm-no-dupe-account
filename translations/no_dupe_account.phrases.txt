@@ -59,6 +59,60 @@
 		"en"	"You must display a coin on your CS:GO profile to connect to the server"
 	}
 	
+	"Kicked_Bans_VAC"
+	{
+		"en"	"Accounts that have already been VAC Banned are forbidden"
+	}
+	
+	"Kicked_Bans_VAC_multiple"
+	{
+		"en"	"Accounts that have already been VAC Banned multiple times are forbidden"
+	}
+	
+	"Kicked_Bans_Game"
+	{
+		"en"	"Accounts that have already been Game Banned are forbidden"
+	}
+	
+	"Kicked_Bans_Game_multiple"
+	{
+		"en"	"Accounts that have already been Game Banned multiple times are forbidden"
+	}
+	
+	"Kicked_Bans_Community"
+	{
+		"en"	"Accounts that are Community Banned are forbidden"
+	}
+	
+	"Kicked_Bans_Recent"
+	{
+		"en"	"You have been VAC or Game banned recently. As a security measure, you are not be able to join the server for now"
+	}
+	
+	// ---------------------------------------
+	// 				NDA COMMAND
+	// ---------------------------------------
+	
+	"Command_NDA_NoMenu"
+	{
+		"en"	"Sorry, but it looks like no menu is enabled, change your settings to add some."
+	}
+	
+	"Command_NDA_CommunityBans"
+	{
+		"en"	"Community Bans"
+	}
+	
+	"Command_NDA_RecentBans"
+	{
+		"en"	"Recent Bans"
+	}
+	
+	"Command_NDA_PlayerDisconnected"
+	{
+		"en"	"{darkred}[NDA] {lightblue}Oops, seems like the player disconnected!"
+	}
+	
 	// ---------------------------------------
 	// 				VPN MESSAGES
 	// ---------------------------------------
@@ -67,7 +121,7 @@
 	{
 		// {1} = playername | {2} = IP
 		"#format"	"{1:s},{2:s}"
-		"en"		"{darkred}[VPN] {blue}Player {darkblue}{1}{blue} seems using a VPN with the IP {red}{2}"
+		"en"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} seems using a VPN with the IP {red}{2}"
 	}
 	
 	"Discord_SeemsUsingVPN"
@@ -77,16 +131,9 @@
 		"en"		"Player {client} seems using a VPN with the IP {1}"
 	}
 	
-	"Command_VPN_PlayerDisconnected"
-	{
-		// {1} = playername | {2} = IP
-		"#format"	"{1:s},{2:s}"
-		"en"		"{darkred}[VPN] {lightblue}Oops, seems like the player disconnected!"
-	}
-	
 	"Command_VPN_Title"
 	{
-		"en"	"Players that potentially have a VPN"
+		"en"	"Players who potentially have a VPN"
 	}
 	
 	"Command_VPN_Recheck"
@@ -97,6 +144,57 @@
 	"Command_VPN_NoVPN"
 	{
 		"en"	"No player appears to be using a VPN."
+	}
+	
+	// -------------------------------------------
+	// 				STEAM BAN MESSAGES
+	// -------------------------------------------
+	
+	"IsCommunityBanned"
+	{
+		// {1} = playername
+		"#format"	"{1:s}"
+		"en"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} is {red}community banned"
+	}
+	
+	"Discord_IsCommunityBanned"
+	{
+		// {client} = playername+link
+		"en"	"Player {client} is community banned"
+	}
+	
+	"Command_Bans_Community_Title"
+	{
+		"en"	"Players that are Community Banned"
+	}
+	
+	"Command_Bans_Community_NoBan"
+	{
+		"en"	"No player is Community Banned."
+	}
+	
+	"RecentlyBanned"
+	{
+		// {1} = playername | {2} = days ago
+		"#format"	"{1:s},{2:i}"
+		"en"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} has been {red}VAC/Game banned {2} day(s) ago"
+	}
+	
+	"Discord_RecentlyBanned"
+	{
+		// {client} = playername+link | {1} = days ago
+		"#format"	"{1:i}"
+		"en"		"Player {client} has been VAC/Game banned {1} day(s) ago"
+	}
+	
+	"Command_Bans_Recent_Title"
+	{
+		"en"	"Players that have been Recently Banned"
+	}
+	
+	"Command_Bans_Recent_NoBan"
+	{
+		"en"	"No player has been Recently Banned."
 	}
 	
 	// -----------------------------------------

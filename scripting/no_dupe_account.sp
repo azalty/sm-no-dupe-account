@@ -7,15 +7,19 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.2.2"
+#define PLUGIN_VERSION "1.3.0"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
+int g_iVACBans[MAXPLAYERS + 1];
+int g_iGameBans[MAXPLAYERS + 1];
+int g_iLastBan[MAXPLAYERS + 1];
 
 bool g_bClientPassedCheck[MAXPLAYERS + 1];
 bool g_bClientPrivatePlaytime[MAXPLAYERS + 1];
 bool g_bClientPrivateProfile[MAXPLAYERS + 1];
 bool g_bVPN[MAXPLAYERS + 1];
+bool g_bCommunityBanned[MAXPLAYERS + 1];
 
 bool g_bSteamAPIKeyAvailable;
 bool g_bDiscordAvailable;
@@ -43,6 +47,12 @@ ConVar cvarPlaytime;
 ConVar cvarSteamLevel;
 ConVar cvarSteamAge;
 ConVar cvarCoin;
+ConVar cvarBansVAC;
+ConVar cvarBansGame;
+ConVar cvarBansCommunity;
+ConVar cvarBansTotal;
+ConVar cvarBansRecent;
+ConVar cvarLog;
 
 ConVar cvarHostname;
 
@@ -71,6 +81,12 @@ public void OnPluginStart()
 	cvarSteamLevel = AutoExecConfig_CreateConVar("nda_steam_level", "5", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarSteamAge = AutoExecConfig_CreateConVar("nda_steam_age", "1576800", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam account age is newer than this value in minutes or his profile is private\nany negative integer = same as positive, but is not a check and will kick user\n&integer (ex: &60) = same as negative, but will not kick user if his profile is private");
 	cvarCoin = AutoExecConfig_CreateConVar("nda_coin", "1", "0 = disabled\n1 = is a user check that fails if he doesn't have any CS:GO coin/badge equipped\n2 = kick user if he doesn't have any CS:GO coin/badge equipped (this is not recommended as a lot of players don't have a coin)");
+	cvarBansVAC = AutoExecConfig_CreateConVar("nda_bans_vac", "0", "(Requires SteamWorks)\n0 = disabled\nany integer = kick player if he has been VAC banned at least X times");
+	cvarBansGame = AutoExecConfig_CreateConVar("nda_bans_game", "0", "(Requires SteamWorks)\n0 = disabled\nany integer = kick player if he has been Game banned at least X times");
+	cvarBansCommunity = AutoExecConfig_CreateConVar("nda_bans_community", "2", "(Requires SteamWorks)\n0 = disabled\n1 = kick player if he is community banned (spam, phishing, nudity...)\nThese people will have private profiles and are unable to add friends or comment.\n2 = send an in-game alert to admins if player is community banned (and a discord message if setup)");
+	cvarBansTotal = AutoExecConfig_CreateConVar("nda_bans_total", "0", "(Requires SteamWorks)\n0 = disabled\nany integer = kick player if he has been banned at least X times (VAC+Game bans)");
+	cvarBansRecent = AutoExecConfig_CreateConVar("nda_bans_recent", "5", "(Requires SteamWorks)\n0 = disabled\nany positive integer = send an in-game alert to admins (and a discord message if setup) if player has been VAC or Game banned X days ago or less\nany negative integer = same as positive integer, but instead of sending an alert, it will kick the player");
+	cvarLog = AutoExecConfig_CreateConVar("nda_log", "1", "0 = don't log\n1 = log check approvals & refusals to server's console\n2 = log check refusals to server's console");
 	
 	AutoExecConfig_ExecuteFile();
 	AutoExecConfig_CleanFile();
@@ -91,7 +107,8 @@ public void OnPluginStart()
 	// Cmds
 	
 	RegAdminCmd("sm_checkmepls", Command_CheckMePls, ADMFLAG_ROOT, "Runs every check on you again and apply punishment if needed");
-	RegAdminCmd("sm_vpn", Command_VPN, ADMFLAG_CHANGEMAP, "Opens a menu to see if someone is potentially using a VPN");
+	//RegAdminCmd("sm_vpn", Command_VPN, ADMFLAG_BAN, "Opens a menu to see if someone is potentially using a VPN");
+	RegAdminCmd("sm_nda", Command_NDA, ADMFLAG_BAN, "Opens the NDA menu with useful infos");
 }
 
 public void OnConfigsExecuted()
@@ -183,6 +200,10 @@ public void OnConfigsExecuted()
 	{
 		g_iChecks++;
 	}
+	if (!g_bSteamAPIKeyAvailable && (cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue))
+	{
+		LogMessage("WARNING: No SteamAPI Key is configured, but Steam Bans method is enabled! Steam Bans requests will NOT work.");
+	}
 }
 
 public void OnAllPluginsLoaded()
@@ -190,9 +211,9 @@ public void OnAllPluginsLoaded()
 	g_bSteamworksExists = LibraryExists("SteamWorks");
 	g_bDiscordExists = LibraryExists("discord-api");
 	
-	if (!g_bSteamworksExists && (cvarVPN.BoolValue || cvarPrime.BoolValue || cvarPlaytime.BoolValue || cvarSteamLevel.BoolValue || g_bDiscordAvailable || g_bSteamAgeEnabled))
+	if (!g_bSteamworksExists && (cvarVPN.BoolValue || cvarPrime.BoolValue || cvarPlaytime.BoolValue || cvarSteamLevel.BoolValue || g_bDiscordAvailable || g_bSteamAgeEnabled || cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue))
 	{
-		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime, Playtime and Steam Level modules will NOT work.");
+		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime, Playtime, Steam Level and Steam Bans modules will NOT work.");
 	}
 	if (!g_bDiscordExists && g_bDiscordAvailable)
 	{
@@ -268,20 +289,78 @@ public void OnHostnameChange(ConVar convar, char[] oldValue, char[] newValue)
 	strcopy(g_sHostname, sizeof(g_sHostname), newValue);
 }
 
-public Action Command_VPN(int client, int args)
+public Action Command_NDA(int client, int args)
 {
-	if (!g_bSteamworksExists)
+	Menu menu = new Menu(NDAMenu);
+	menu.SetTitle("No Dupe Account");
+	
+	bool bMenu;
+	char buffer[64];
+	if (cvarVPN.BoolValue)
 	{
-		CPrintToChat(client, "{darkred}Sorry, but it seems that {darkblue}SteamWorks{darkred}, a needed extension, is not loaded.");
-		return Plugin_Handled;
+		bMenu = true;
+		menu.AddItem("vpn", "VPNs");
+	}
+	if (cvarBansCommunity.IntValue == 2)
+	{
+		bMenu = true;
+		Format(buffer, sizeof(buffer), "%T", "Command_NDA_CommunityBans", client);
+		menu.AddItem("communitybans", buffer);
+	}
+	if (cvarBansRecent.IntValue > 0)
+	{
+		bMenu = true;
+		Format(buffer, sizeof(buffer), "%T", "Command_NDA_RecentBans", client);
+		menu.AddItem("recentbans", buffer);
+	}
+	if (!bMenu)
+	{
+		Format(buffer, sizeof(buffer), "%T", "Command_NDA_NoMenu", client);
+		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
 	}
 	
+	menu.ExitButton = true;
+	menu.Display(client, MENU_TIME_FOREVER);
+	return Plugin_Handled;
+}
+
+public int NDAMenu(Menu menu, MenuAction action, int client, int itemNum)
+{
+	switch (action)
+	{
+		case MenuAction_Select:
+		{
+			char info[16];
+			GetMenuItem(menu, itemNum, info, sizeof(info));
+			
+			if (StrEqual(info, "vpn"))
+			{
+				InitVPNMenu(client);
+			}
+			else if (StrEqual(info, "communitybans"))
+			{
+				InitCommunityBansMenu(client);
+			}
+			else
+			{
+				InitRecentBansMenu(client);
+			}
+		}
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+}
+
+void InitVPNMenu(int client)
+{
 	Menu menu = new Menu(VPNMenu);
 	char buffer[64];
 	Format(buffer, sizeof(buffer), "%T", "Command_VPN_Title", client);
 	menu.SetTitle(buffer);
 	char sName[MAX_NAME_LENGTH];
-	int iAmount;
+	bool bMenu;
 	Format(buffer, sizeof(buffer), "%T", "Command_VPN_Recheck", client);
 	menu.AddItem("verify", buffer);
 	menu.AddItem("", "-", ITEMDRAW_DISABLED);
@@ -292,17 +371,17 @@ public Action Command_VPN(int client, int args)
 			IntToString(GetClientUserId(i), buffer, sizeof(buffer));
 			GetClientName(i, sName, sizeof(sName));
 			menu.AddItem(buffer, sName);
-			iAmount++;
+			bMenu = true;
 		}
 	}
-	if (!iAmount)
+	if (!bMenu)
 	{
 		Format(buffer, sizeof(buffer), "%T", "Command_VPN_NoVPN", client);
-		menu.AddItem("", "No player appears to be using a VPN.", ITEMDRAW_DISABLED);
+		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
 	}
 	menu.ExitButton = true;
+	menu.ExitBackButton = true;
 	menu.Display(client, MENU_TIME_FOREVER);
-	return Plugin_Handled;
 }
 
 public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
@@ -337,7 +416,7 @@ public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 			int i = GetClientOfUserId(StringToInt(info));
 			if (!i)
 			{
-				CPrintToChat(client, "%t", "Command_VPN_PlayerDisconnected");
+				CPrintToChat(client, "%t", "Command_NDA_PlayerDisconnected");
 				return 0;
 			}
 			
@@ -347,6 +426,14 @@ public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 			GetClientName(i, playername, sizeof(playername));
 			CPrintToChat(client, "%t", "SeemsUsingVPN", playername, ip);
 		}
+		case MenuAction_Cancel: 
+		{
+			if (itemNum == MenuCancel_ExitBack)
+			{
+				Command_NDA(client, 0);
+			}
+			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
+		}
 		case MenuAction_End:
 		{
 			delete menu;
@@ -355,15 +442,159 @@ public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 	return 0;
 }
 
+void InitCommunityBansMenu(int client)
+{
+	Menu menu = new Menu(CommunityBansMenu);
+	char buffer[64];
+	Format(buffer, sizeof(buffer), "%T", "Command_Bans_Community_Title", client);
+	menu.SetTitle(buffer);
+	char sName[MAX_NAME_LENGTH];
+	bool bMenu;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && !IsFakeClient(i) && g_bCommunityBanned[i])
+		{
+			IntToString(GetClientUserId(i), buffer, sizeof(buffer));
+			GetClientName(i, sName, sizeof(sName));
+			menu.AddItem(buffer, sName);
+			bMenu = true;
+		}
+	}
+	if (!bMenu)
+	{
+		Format(buffer, sizeof(buffer), "%T", "Command_Bans_Community_NoBan", client);
+		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+	}
+	menu.ExitButton = true;
+	menu.ExitBackButton = true;
+	menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int CommunityBansMenu(Menu menu, MenuAction action, int client, int itemNum)
+{
+	switch (action)
+	{
+		case MenuAction_Select:
+		{
+			char info[16];
+			GetMenuItem(menu, itemNum, info, sizeof(info));
+						
+			int i = GetClientOfUserId(StringToInt(info));
+			if (!i)
+			{
+				CPrintToChat(client, "%t", "Command_NDA_PlayerDisconnected");
+				return 0;
+			}
+			
+			char playername[MAX_NAME_LENGTH];
+			GetClientName(i, playername, sizeof(playername));
+			CPrintToChat(client, "%t", "IsCommunityBanned", playername);
+		}
+		case MenuAction_Cancel: 
+		{
+			if (itemNum == MenuCancel_ExitBack)
+			{
+				Command_NDA(client, 0);
+			}
+			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
+		}
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+	return 0;
+}
+
+void InitRecentBansMenu(int client)
+{
+	Menu menu = new Menu(RecentBansMenu);
+	char buffer[64];
+	Format(buffer, sizeof(buffer), "%T", "Command_Bans_Recent_Title", client);
+	menu.SetTitle(buffer);
+	char sName[MAX_NAME_LENGTH];
+	bool bMenu;
+	int days = cvarBansRecent.IntValue;
+	if (days < 0)
+	{
+		days = -days;
+	}
+	
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && !IsFakeClient(i) && ((g_iVACBans[client] + g_iGameBans[client]) > 0) && (g_iLastBan[i] <= days))
+		{
+			IntToString(GetClientUserId(i), buffer, sizeof(buffer));
+			GetClientName(i, sName, sizeof(sName));
+			menu.AddItem(buffer, sName);
+			bMenu = true;
+		}
+	}
+	if (!bMenu)
+	{
+		Format(buffer, sizeof(buffer), "%T", "Command_Bans_Community_NoBan", client);
+		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+	}
+	menu.ExitButton = true;
+	menu.ExitBackButton = true;
+	menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int RecentBansMenu(Menu menu, MenuAction action, int client, int itemNum)
+{
+	switch (action)
+	{
+		case MenuAction_Select:
+		{
+			char info[16];
+			GetMenuItem(menu, itemNum, info, sizeof(info));
+						
+			int i = GetClientOfUserId(StringToInt(info));
+			if (!i)
+			{
+				CPrintToChat(client, "%t", "Command_NDA_PlayerDisconnected");
+				return 0;
+			}
+			
+			char playername[MAX_NAME_LENGTH];
+			GetClientName(i, playername, sizeof(playername));
+			CPrintToChat(client, "%t", "RecentlyBanned", playername, g_iLastBan[i]);
+		}
+		case MenuAction_Cancel: 
+		{
+			if (itemNum == MenuCancel_ExitBack)
+			{
+				Command_NDA(client, 0);
+			}
+			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
+		}
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+	return 0;
+}
+
+void ResetClientVars(int client)
+{
+	g_iClientChecksDone[client] = 0;
+	g_iVACBans[client] = 0
+	g_iGameBans[client] = 0;
+	g_iLastBan[client] = 0;
+	g_bClientPassedCheck[client] = false;
+	g_bClientPrivatePlaytime[client] = false;
+	g_bClientPrivateProfile[client] = false;
+	g_bVPN[client] = false;
+	g_bCommunityBanned[client] = false;
+	delete g_hResourceTimer[client];
+}
+
 public Action Command_CheckMePls(int client, int args)
 {
 	if (client)
 	{
-		g_iClientChecksDone[client] = 0;
-		g_bClientPassedCheck[client] = false;
-		g_bClientPrivatePlaytime[client] = false;
-		g_bClientPrivateProfile[client] = false;
-		g_bVPN[client] = false;
+		ResetClientVars(client);
 		OnClientPostAdminCheck(client);
 	}
 	return Plugin_Handled;
@@ -371,12 +602,7 @@ public Action Command_CheckMePls(int client, int args)
 
 public void OnClientDisconnect(int client)
 {
-	g_iClientChecksDone[client] = 0;
-	g_bClientPassedCheck[client] = false;
-	g_bClientPrivatePlaytime[client] = false;
-	g_bClientPrivateProfile[client] = false;
-	g_bVPN[client] = false;
-	delete g_hResourceTimer[client];
+	ResetClientVars(client);
 }
 
 //public void OnClientAuthorized(int client)
@@ -409,8 +635,9 @@ public void OnClientPostAdminCheck(int client)
 				// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
 				if (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense) // if player is paid prime
 				{
+					if (!g_bClientPassedCheck[client])
+						PassedCheck(client, "Is Prime");
 					g_bClientPassedCheck[client] = true;
-					
 				}
 				else
 				{
@@ -431,6 +658,11 @@ public void OnClientPostAdminCheck(int client)
 			if (g_bSteamAgeEnabled)
 			{
 				CheckSteamAge(client);
+			}
+			
+			if (cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue)
+			{
+				CheckSteamBans(client);
 			}
 		}
 	}
@@ -459,6 +691,8 @@ public Action Timer_GetResource(Handle timer, int client)
 		g_iClientChecksDone[client]++;
 		if (level >= cvarLevel.IntValue)
 		{
+			if (!g_bClientPassedCheck[client])
+				PassedCheck(client, "Enough CS:GO Level");
 			g_bClientPassedCheck[client] = true;
 		}
 		else
@@ -474,6 +708,8 @@ public Action Timer_GetResource(Handle timer, int client)
 		{
 			if (cvarCoin.IntValue == 1)
 			{
+				if (!g_bClientPassedCheck[client])
+					PassedCheck(client, "Has a Coin on his cs:go profile");
 				g_iClientChecksDone[client]++;
 				g_bClientPassedCheck[client] = true;
 			}
@@ -509,13 +745,24 @@ void CheckIP(int client, char[] ip, bool dontNotify = false)
 
 public int OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid, bool dontNotify)
 {
+	int client = GetClientOfUserId(userid);
+	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
+		LogMessage("Check IP request failed!");
+		if ((cvarVPN.IntValue == 2) && client)
+		{
+			if (!g_bClientPassedCheck[client])
+			{
+				PassedCheck(client, "Check IP request failed");
+				g_bClientPassedCheck[client] = true;
+			}
+			g_iClientChecksDone[client]++;
+		}
 		delete hRequest;
 		return;
 	}
 	
-	int client = GetClientOfUserId(userid);
 	if (!client)
 	{
 		delete hRequest;
@@ -545,7 +792,7 @@ public int OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 					GetClientIP(client, ip, sizeof(ip));
 					for (int i = 1; i <= MaxClients; i++)
 					{
-						if (IsClientInGame(i) && CheckCommandAccess(i, "sm_vpn", ADMFLAG_BAN))
+						if (IsClientInGame(i) && CheckCommandAccess(i, "sm_nda", ADMFLAG_BAN))
 						{
 							CPrintToChat(i, "%t", "SeemsUsingVPN", playername, ip);
 						}
@@ -560,6 +807,8 @@ public int OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 			}
 			case 2:
 			{
+				if (!g_bClientPassedCheck[client])
+					PassedCheck(client, "No VPN");
 				g_bClientPassedCheck[client] = true;
 				g_iClientChecksDone[client]++;
 			}
@@ -586,14 +835,23 @@ void ProcessChecks(int client)
 	{
 		if (g_bClientPrivatePlaytime[client])
 		{
+			if (cvarLog.BoolValue)
+				LogMessage("Refused %L (no check passed - private playtime)", client);
+			
 			KickClient(client, "%t", "Kicked_PrivatePlaytime");
 		}
 		else if (g_bClientPrivateProfile[client])
 		{
+			if (cvarLog.BoolValue)
+				LogMessage("Refused %L (no check passed - private profile)", client);
+			
 			KickClient(client, "%t", "Kicked_PrivateProfile");
 		}
 		else
 		{
+			if (cvarLog.BoolValue)
+				LogMessage("Refused %L (no check passed)", client);
+			
 			KickClient(client, "%t", "Kicked_FailedChecks");
 		}
 	}
@@ -617,13 +875,24 @@ void CheckPlaytime(int client)
 
 public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
+	int client = GetClientOfUserId(userid);
+	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
+		LogMessage("Playtime request failed!");
+		if ((cvarPlaytime.IntValue > 0) && client)
+		{
+			if (!g_bClientPassedCheck[client])
+			{
+				PassedCheck(client, "Playtime request failed");
+				g_bClientPassedCheck[client] = true;
+			}
+			g_iClientChecksDone[client]++;
+		}
 		delete hRequest;
 		return;
 	}
 	
-	int client = GetClientOfUserId(userid);
 	if (!client)
 	{
 		delete hRequest;
@@ -709,6 +978,8 @@ public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequest
 	}
 	else if (!kick)
 	{
+		if (!g_bClientPassedCheck[client])
+			PassedCheck(client, "Enough playtime");
 		g_bClientPassedCheck[client] = true;
 		g_iClientChecksDone[client]++;
 	}
@@ -729,13 +1000,24 @@ void CheckSteamLevel(int client)
 
 public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
+	int client = GetClientOfUserId(userid);
+	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
+		LogMessage("Steam Level request failed!");
+		if ((cvarSteamLevel.IntValue > 0) && client)
+		{
+			if (!g_bClientPassedCheck[client])
+			{
+				PassedCheck(client, "Steam Level request failed");
+				g_bClientPassedCheck[client] = true;
+			}
+			g_iClientChecksDone[client]++;
+		}
 		delete hRequest;
 		return;
 	}
 	
-	int client = GetClientOfUserId(userid);
 	if (!client)
 	{
 		delete hRequest;
@@ -794,6 +1076,8 @@ public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bReque
 	}
 	else if (!kick)
 	{
+		if (!g_bClientPassedCheck[client])
+			PassedCheck(client, "Enough Steam Level");
 		g_bClientPassedCheck[client] = true;
 		g_iClientChecksDone[client]++;
 	}
@@ -814,13 +1098,42 @@ void CheckSteamAge(int client)
 
 public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
+	int iMode = 0; // 0 = positive, 1 = negative, 2 = '~'
+	int iRequiredAge;
+	
+	if (StrContains(g_sSteamAge, "~") != -1)
+	{
+		iMode = 2;
+		iRequiredAge = StringToInt(g_sSteamAge[1]);
+	}
+	else
+	{
+		iRequiredAge = StringToInt(g_sSteamAge);
+		if (iRequiredAge < 0)
+		{
+			iMode = 1;
+			iRequiredAge = -iRequiredAge;
+		}
+	}
+	
+	int client = GetClientOfUserId(userid);
+	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
+		LogMessage("Steam Age request failed!");
+		if (!iMode && client)
+		{
+			if (!g_bClientPassedCheck[client])
+			{
+				PassedCheck(client, "Steam Age request failed");
+				g_bClientPassedCheck[client] = true;
+			}
+			g_iClientChecksDone[client]++;
+		}
 		delete hRequest;
 		return;
 	}
 	
-	int client = GetClientOfUserId(userid);
 	if (!client)
 	{
 		delete hRequest;
@@ -845,24 +1158,6 @@ public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequest
 		iSteamAge = StringToInt(sArray[0][13]); // get everything after ':', aka the integer
 		iSteamAge = GetTime() - iSteamAge; // returns age in seconds
 		iSteamAge /= 60; // returns age in minutes, rounds to zero (iSteamAge is an integer)
-	}
-	
-	int iMode = 0; // 0 = positive, 1 = negative, 2 = '~'
-	int iRequiredAge;
-	
-	if (StrContains(g_sSteamAge, "~") != -1)
-	{
-		iMode = 2;
-		iRequiredAge = StringToInt(g_sSteamAge[1]);
-	}
-	else
-	{
-		iRequiredAge = StringToInt(g_sSteamAge);
-		if (iRequiredAge < 0)
-		{
-			iMode = 1;
-			iRequiredAge = -iRequiredAge;
-		}
 	}
 	
 	if (iSteamAge == -1)
@@ -894,8 +1189,138 @@ public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequest
 	}
 	else if (!iMode)
 	{
+		if (!g_bClientPassedCheck[client])
+			PassedCheck(client, "Enough Steam Age");
 		g_bClientPassedCheck[client] = true;
 		g_iClientChecksDone[client]++;
+	}
+}
+
+void CheckSteamBans(int client)
+{
+	char steamid[64];
+	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
+	Format(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer), "http://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key=%s&steamids=%s", g_sSteamAPIKey, steamid);
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
+	
+	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamBansResponse);
+	SteamWorks_SendHTTPRequest(hRequest);
+}
+
+public int OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+{
+	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
+	{
+		LogMessage("Steam Bans request failed!");
+		delete hRequest;
+		return;
+	}
+	
+	int client = GetClientOfUserId(userid);
+	if (!client)
+	{
+		delete hRequest;
+		return;
+	}
+	
+	int iBodySize;
+	SteamWorks_GetHTTPResponseBodySize(hRequest, iBodySize);
+	
+	char[] sBody = new char[iBodySize];
+	SteamWorks_GetHTTPResponseBodyData(hRequest, sBody, iBodySize);
+	
+	delete hRequest;
+	
+	char sArray[6][64]; // cut the last one
+	ExplodeString(sBody, ",", sArray, sizeof(sArray), sizeof(sArray[]));
+	if (StrContains(sArray[1], "false") == -1) // doesn't contain 'false'
+	{
+		g_bCommunityBanned[client] = true;
+	}
+	g_iVACBans[client] = StringToInt(sArray[3][18]) // get everything after ':', aka the integer
+	g_iLastBan[client] = StringToInt(sArray[4][19]) // get everything after ':', aka the integer, days since last ban
+	g_iGameBans[client] = StringToInt(sArray[5][19]) // get everything after ':', aka the integer
+	
+	if (cvarBansVAC.BoolValue && (g_iVACBans[client] >= cvarBansVAC.IntValue))
+	{
+		if (g_iVACBans[client] == 1)
+			KickClient(client, "%t", "Kicked_Bans_VAC");
+		else
+			KickClient(client, "%t", "Kicked_Bans_VAC_multiple");
+	}
+	else if (cvarBansGame.BoolValue && (g_iGameBans[client] >= cvarBansGame.IntValue))
+	{
+		if (g_iGameBans[client] == 1)
+			KickClient(client, "%t", "Kicked_Bans_Game");
+		else
+			KickClient(client, "%t", "Kicked_Bans_Game_multiple");
+	}
+	else if (g_bCommunityBanned[client] && cvarBansCommunity.BoolValue)
+	{
+		if (cvarBansCommunity.IntValue == 1)
+		{
+			KickClient(client, "%t", "Kicked_Bans_Community");
+		}
+		else
+		{
+			char playername[MAX_NAME_LENGTH];
+			GetClientName(client, playername, sizeof(playername));
+			for (int i = 1; i <= MaxClients; i++)
+			{
+				if (IsClientInGame(i) && CheckCommandAccess(i, "sm_nda", ADMFLAG_BAN))
+				{
+					CPrintToChat(i, "%t", "IsCommunityBanned", playername);
+				}
+			}
+			if (g_bDiscordAvailable && g_bDiscordExists)
+			{
+				char message[128];
+				Format(message, sizeof(message), "%T", "Discord_IsCommunityBanned", LANG_SERVER);
+				SendDiscordMessage("Community Ban", message, client);
+			}
+		}
+	}
+	else if (cvarBansTotal.BoolValue && ((g_iVACBans[client] + g_iGameBans[client]) >= cvarBansTotal.IntValue))
+	{
+		KickClient(client, "%t", "Kicked_Bans_Total");
+	}
+	else // having else if here is not a problem in itself for now, but it might be in the future due to how the BansRecent method is done
+	{
+		if (cvarBansRecent.BoolValue)
+		{
+			if ((cvarBansRecent.IntValue < 0) && ((g_iVACBans[client] + g_iGameBans[client]) > 0) && (g_iLastBan[client] <= -cvarBansRecent.IntValue))
+			{
+				KickClient(client, "%t", "Kicked_Bans_Recent");
+			}
+			else if ((cvarBansRecent.IntValue > 0) && ((g_iVACBans[client] + g_iGameBans[client]) > 0) && (g_iLastBan[client] <= cvarBansRecent.IntValue))
+			{
+				char playername[MAX_NAME_LENGTH];
+				GetClientName(client, playername, sizeof(playername));
+				for (int i = 1; i <= MaxClients; i++)
+				{
+					if (IsClientInGame(i) && CheckCommandAccess(i, "sm_nda", ADMFLAG_BAN))
+					{
+						CPrintToChat(i, "%t", "RecentlyBanned", playername, g_iLastBan[client]);
+					}
+				}
+				if (g_bDiscordAvailable && g_bDiscordExists)
+				{
+					char message[128];
+					Format(message, sizeof(message), "%T", "Discord_RecentlyBanned", LANG_SERVER, g_iLastBan[client]);
+					SendDiscordMessage("Recently Banned", message, client);
+				}
+			}
+		}
+	}
+}
+
+void PassedCheck(int client, char[] reason)
+{
+	if (cvarLog.IntValue == 1)
+	{
+		LogMessage("Approved %L (%s)", client, reason);
 	}
 }
 
