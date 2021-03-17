@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.3.0"
+#define PLUGIN_VERSION "1.3.1"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -20,6 +20,7 @@ bool g_bClientPrivatePlaytime[MAXPLAYERS + 1];
 bool g_bClientPrivateProfile[MAXPLAYERS + 1];
 bool g_bVPN[MAXPLAYERS + 1];
 bool g_bCommunityBanned[MAXPLAYERS + 1];
+bool g_bPrime[MAXPLAYERS + 1];
 
 bool g_bSteamAPIKeyAvailable;
 bool g_bDiscordAvailable;
@@ -76,16 +77,16 @@ public void OnPluginStart()
 	cvarDiscord = AutoExecConfig_CreateConVar("nda_discord", "", "(Requires Discord API and SteamWorks)\nDiscord integration with a webhook\nempty = disabled\nwebhook url = enable", FCVAR_PROTECTED);
 	cvarVPN = AutoExecConfig_CreateConVar("nda_vpn", "1", "(Requires SteamWorks)\n0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
 	cvarLevel = AutoExecConfig_CreateConVar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
-	cvarPrime = AutoExecConfig_CreateConVar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game)");
+	cvarPrime = AutoExecConfig_CreateConVar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players");
 	cvarPlaytime = AutoExecConfig_CreateConVar("nda_playtime", "120", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if he has less mins in playtime than asked or has private hours\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarSteamLevel = AutoExecConfig_CreateConVar("nda_steam_level", "5", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarSteamAge = AutoExecConfig_CreateConVar("nda_steam_age", "1576800", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam account age is newer than this value in minutes or his profile is private\nany negative integer = same as positive, but is not a check and will kick user\n&integer (ex: &60) = same as negative, but will not kick user if his profile is private");
 	cvarCoin = AutoExecConfig_CreateConVar("nda_coin", "1", "0 = disabled\n1 = is a user check that fails if he doesn't have any CS:GO coin/badge equipped\n2 = kick user if he doesn't have any CS:GO coin/badge equipped (this is not recommended as a lot of players don't have a coin)");
-	cvarBansVAC = AutoExecConfig_CreateConVar("nda_bans_vac", "0", "(Requires SteamWorks)\n0 = disabled\nany integer = kick player if he has been VAC banned at least X times");
-	cvarBansGame = AutoExecConfig_CreateConVar("nda_bans_game", "0", "(Requires SteamWorks)\n0 = disabled\nany integer = kick player if he has been Game banned at least X times");
-	cvarBansCommunity = AutoExecConfig_CreateConVar("nda_bans_community", "2", "(Requires SteamWorks)\n0 = disabled\n1 = kick player if he is community banned (spam, phishing, nudity...)\nThese people will have private profiles and are unable to add friends or comment.\n2 = send an in-game alert to admins if player is community banned (and a discord message if setup)");
-	cvarBansTotal = AutoExecConfig_CreateConVar("nda_bans_total", "0", "(Requires SteamWorks)\n0 = disabled\nany integer = kick player if he has been banned at least X times (VAC+Game bans)");
-	cvarBansRecent = AutoExecConfig_CreateConVar("nda_bans_recent", "5", "(Requires SteamWorks)\n0 = disabled\nany positive integer = send an in-game alert to admins (and a discord message if setup) if player has been VAC or Game banned X days ago or less\nany negative integer = same as positive integer, but instead of sending an alert, it will kick the player");
+	cvarBansVAC = AutoExecConfig_CreateConVar("nda_bans_vac", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been VAC banned at least X times");
+	cvarBansGame = AutoExecConfig_CreateConVar("nda_bans_game", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been Game banned at least X times");
+	cvarBansCommunity = AutoExecConfig_CreateConVar("nda_bans_community", "2", "(Requires SteamAPI Key)\n0 = disabled\n1 = kick player if he is community banned (spam, phishing, nudity...)\nThese people will have private profiles and are unable to add friends or comment.\n2 = send an in-game alert to admins if player is community banned (and a discord message if setup)");
+	cvarBansTotal = AutoExecConfig_CreateConVar("nda_bans_total", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been banned at least X times (VAC+Game bans)");
+	cvarBansRecent = AutoExecConfig_CreateConVar("nda_bans_recent", "5", "(Requires SteamAPI Key)\n0 = disabled\nany positive integer = send an in-game alert to admins (and a discord message if setup) if player has been VAC or Game banned X days ago or less\nany negative integer = same as positive integer, but instead of sending an alert, it will kick the player");
 	cvarLog = AutoExecConfig_CreateConVar("nda_log", "1", "0 = don't log\n1 = log check approvals & refusals to server's console\n2 = log check refusals to server's console");
 	
 	AutoExecConfig_ExecuteFile();
@@ -141,16 +142,9 @@ public void OnConfigsExecuted()
 	{
 		g_iChecks++;
 	}
-	if (cvarPrime.BoolValue)
+	if (cvarPrime.IntValue == 1)
 	{
-		if (g_bSteamAPIKeyAvailable)
-		{
-			g_iChecks++;
-		}
-		else
-		{
-			LogMessage("WARNING: No SteamAPI Key is configured, but Prime status checking is enabled! Prime checks will NOT work.");
-		}
+		g_iChecks++;
 	}
 	if (cvarPlaytime.BoolValue)
 	{
@@ -301,17 +295,29 @@ public Action Command_NDA(int client, int args)
 		bMenu = true;
 		menu.AddItem("vpn", "VPNs");
 	}
-	if (cvarBansCommunity.IntValue == 2)
+	if (g_bSteamworksExists)
 	{
-		bMenu = true;
-		Format(buffer, sizeof(buffer), "%T", "Command_NDA_CommunityBans", client);
-		menu.AddItem("communitybans", buffer);
-	}
-	if (cvarBansRecent.IntValue > 0)
-	{
-		bMenu = true;
-		Format(buffer, sizeof(buffer), "%T", "Command_NDA_RecentBans", client);
-		menu.AddItem("recentbans", buffer);
+		if (cvarPrime.BoolValue)
+		{
+			bMenu = true;
+			Format(buffer, sizeof(buffer), "%T", "Command_NDA_NonPrime", client);
+			menu.AddItem("prime", buffer);
+		}
+		if (g_bSteamAPIKeyAvailable)
+		{
+			if (cvarBansCommunity.IntValue == 2)
+			{
+				bMenu = true;
+				Format(buffer, sizeof(buffer), "%T", "Command_NDA_CommunityBans", client);
+				menu.AddItem("communitybans", buffer);
+			}
+			if (cvarBansRecent.IntValue > 0)
+			{
+				bMenu = true;
+				Format(buffer, sizeof(buffer), "%T", "Command_NDA_RecentBans", client);
+				menu.AddItem("recentbans", buffer);
+			}
+		}
 	}
 	if (!bMenu)
 	{
@@ -336,6 +342,10 @@ public int NDAMenu(Menu menu, MenuAction action, int client, int itemNum)
 			if (StrEqual(info, "vpn"))
 			{
 				InitVPNMenu(client);
+			}
+			else if (StrEqual(info, "prime"))
+			{
+				InitPrimeMenu(client);
 			}
 			else if (StrEqual(info, "communitybans"))
 			{
@@ -425,6 +435,70 @@ public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 			char playername[MAX_NAME_LENGTH];
 			GetClientName(i, playername, sizeof(playername));
 			CPrintToChat(client, "%t", "SeemsUsingVPN", playername, ip);
+		}
+		case MenuAction_Cancel: 
+		{
+			if (itemNum == MenuCancel_ExitBack)
+			{
+				Command_NDA(client, 0);
+			}
+			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
+		}
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+	return 0;
+}
+
+void InitPrimeMenu(int client)
+{
+	Menu menu = new Menu(PrimeMenu);
+	char buffer[64];
+	Format(buffer, sizeof(buffer), "%T", "Command_Prime_Title", client);
+	menu.SetTitle(buffer);
+	char sName[MAX_NAME_LENGTH];
+	bool bMenu;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && !IsFakeClient(i) && !g_bPrime[i])
+		{
+			IntToString(GetClientUserId(i), buffer, sizeof(buffer));
+			GetClientName(i, sName, sizeof(sName));
+			menu.AddItem(buffer, sName);
+			bMenu = true;
+		}
+	}
+	if (!bMenu)
+	{
+		Format(buffer, sizeof(buffer), "%T", "Command_Prime_NoNonPrime", client);
+		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
+	}
+	menu.ExitButton = true;
+	menu.ExitBackButton = true;
+	menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int PrimeMenu(Menu menu, MenuAction action, int client, int itemNum)
+{
+	switch (action)
+	{
+		case MenuAction_Select:
+		{
+			char info[16];
+			GetMenuItem(menu, itemNum, info, sizeof(info));
+						
+			int i = GetClientOfUserId(StringToInt(info));
+			if (!i)
+			{
+				CPrintToChat(client, "%t", "Command_NDA_PlayerDisconnected");
+				return 0;
+			}
+			
+			char playername[MAX_NAME_LENGTH];
+			GetClientName(i, playername, sizeof(playername));
+			CPrintToChat(client, "%t", "IsNonPrime", playername);
 		}
 		case MenuAction_Cancel: 
 		{
@@ -532,7 +606,7 @@ void InitRecentBansMenu(int client)
 	}
 	if (!bMenu)
 	{
-		Format(buffer, sizeof(buffer), "%T", "Command_Bans_Community_NoBan", client);
+		Format(buffer, sizeof(buffer), "%T", "Command_Bans_Recent_NoBan", client);
 		menu.AddItem("", buffer, ITEMDRAW_DISABLED);
 	}
 	menu.ExitButton = true;
@@ -587,6 +661,7 @@ void ResetClientVars(int client)
 	g_bClientPrivateProfile[client] = false;
 	g_bVPN[client] = false;
 	g_bCommunityBanned[client] = false;
+	g_bPrime[client] = false;
 	delete g_hResourceTimer[client];
 }
 
@@ -627,24 +702,27 @@ public void OnClientPostAdminCheck(int client)
 			CheckIP(client, ip);
 		}
 		
+		if (cvarPrime.IntValue == 1)
+		{
+			g_iClientChecksDone[client]++;
+			// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
+			if (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense) // if player is paid prime
+			{
+				if (!g_bClientPassedCheck[client])
+					PassedCheck(client, "Is Prime");
+				g_bClientPassedCheck[client] = true;
+				g_bPrime[client] = true;
+			}
+			else
+			{
+				ProcessChecks(client);
+			}
+		}
+		else if ((cvarPrime.IntValue == 2) && (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense))
+			g_bPrime[client] = true;
+		
 		if (g_bSteamAPIKeyAvailable)
 		{
-			if (cvarPrime.BoolValue)
-			{
-				g_iClientChecksDone[client]++;
-				// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
-				if (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense) // if player is paid prime
-				{
-					if (!g_bClientPassedCheck[client])
-						PassedCheck(client, "Is Prime");
-					g_bClientPassedCheck[client] = true;
-				}
-				else
-				{
-					ProcessChecks(client);
-				}
-			}
-			
 			if (cvarPlaytime.BoolValue)
 			{
 				CheckPlaytime(client);

@@ -98,6 +98,11 @@
 		"en"	"Sorry, but it looks like no menu is enabled, change your settings to add some."
 	}
 	
+	"Command_NDA_NonPrime"
+	{
+		"en"	"Non-Prime"
+	}
+	
 	"Command_NDA_CommunityBans"
 	{
 		"en"	"Community Bans"
@@ -144,6 +149,27 @@
 	"Command_VPN_NoVPN"
 	{
 		"en"	"No player appears to be using a VPN."
+	}
+	
+	// ---------------------------------------
+	// 				PRIME MESSAGES
+	// ---------------------------------------
+	
+	"Command_Prime_Title"
+	{
+		"en"	"Non-Prime players"
+	}
+	
+	"Command_Prime_NoNonPrime"
+	{
+		"en"	"No player is Non-Prime"
+	}
+	
+	"IsNonPrime"
+	{
+		// {1} = playername
+		"#format"	"{1:s}"
+		"en"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} doesn't have {red}Prime status"
 	}
 	
 	// -------------------------------------------

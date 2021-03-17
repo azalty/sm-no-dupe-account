@@ -57,57 +57,65 @@
 	"Kicked_NoCoin"
 	{
 		"fr"	"Vous devez afficher un badge sur votre profil CS:GO pour vous connecter au serveur"
+	}
 	
 	"Kicked_Bans_VAC"
 	{
-		"en"	"Les comptes qui ont déjà été VAC Ban sont interdits"
+		"fr"	"Les comptes qui ont déjà été VAC Ban sont interdits"
 	}
 	
 	"Kicked_Bans_VAC_multiple"
 	{
-		"en"	"Les comptes qui ont déjà été VAC Ban plusieurs fois sont interdits"
+		"fr"	"Les comptes qui ont déjà été VAC Ban plusieurs fois sont interdits"
 	}
+	
 	"Kicked_Bans_Game"
 	{
-		"en"	"Les comptes qui ont déjà été Game Ban sont interdits"
+		"fr"	"Les comptes qui ont déjà été Game Ban sont interdits"
 	}
 	
 	"Kicked_Bans_Game_multiple"
 	{
-		"en"	"Les comptes qui ont déjà été Game Ban plusieurs fois sont interdits"
+		"fr"	"Les comptes qui ont déjà été Game Ban plusieurs fois sont interdits"
 	}
 	
 	"Kicked_Bans_Community"
 	{
-		"en"	"Les comptes bannis de la communauté Steam sont interdits"
+		"fr"	"Les comptes bannis de la communauté Steam sont interdits"
 	}
 	
 	"Kicked_Bans_Recent"
 	{
-		"en"	"Vous avez été récemment VAC Ban ou Game Ban. Par mesure de sécurité, vous ne pouvez pas rejoindre le serveur pour le moment"
+		"fr"	"Vous avez été récemment VAC Ban ou Game Ban. Par mesure de sécurité, vous ne pouvez pas rejoindre le serveur pour le moment"
 	}
+	
 	// ---------------------------------------
 	// 				NDA COMMAND
 	// ---------------------------------------
 	
 	"Command_NDA_NoMenu"
 	{
-		"en"	"Désolé, il semblerait qu'aucun menu ne soit activé, modifiez vos paramètres pour en ajouter."
+		"fr"	"Désolé, il semblerait qu'aucun menu ne soit activé, modifiez vos paramètres pour en ajouter."
+	}
+	
+	"Command_NDA_NonPrime"
+	{
+		"en"	"Non Prime"
 	}
 	
 	"Command_NDA_CommunityBans"
 	{
-		"en"	"Bans de la Communauté"
+		"fr"	"Bans de la Communauté"
 	}
 	
 	"Command_NDA_RecentBans"
 	{
-		"en"	"Bans Récents"
+		"fr"	"Bans Récents"
 	}
 	
 	"Command_NDA_PlayerDisconnected"
 	{
-		"en"	"{darkred}[NDA] {lightblue}Oups, il semblerait que le joueur se soit déconnecté !"
+		"fr"	"{darkred}[NDA] {lightblue}Oups, il semblerait que le joueur se soit déconnecté !"
 	}
 	
 	// ---------------------------------------
@@ -143,6 +151,27 @@
 		"fr"	"Aucun joueur ne semble utiliser un VPN."
 	}
 	
+	// ---------------------------------------
+	// 				PRIME MESSAGES
+	// ---------------------------------------
+	
+	"Command_Prime_Title"
+	{
+		"en"	"Joueurs sans le statut Prime"
+	}
+	
+	"Command_Prime_NoNonPrime"
+	{
+		"en"	"Aucun joueur est Non Prime"
+	}
+	
+	"IsNonPrime"
+	{
+		// {1} = playername
+		"#format"	"{1:s}"
+		"en"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} n'a pas le {red}statut Prime"
+	}
+	
 	// -------------------------------------------
 	// 				STEAM BAN MESSAGES
 	// -------------------------------------------
@@ -151,47 +180,47 @@
 	{
 		// {1} = playername
 		"#format"	"{1:s}"
-		"en"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} est {red}banni de la communauté Steam"
+		"fr"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} est {red}banni de la communauté Steam"
 	}
 	
 	"Discord_IsCommunityBanned"
 	{
 		// {client} = playername+link
-		"en"	"Le joueur {client} est banni de la communauté Steam"
+		"fr"	"Le joueur {client} est banni de la communauté Steam"
 	}
 	
 	"Command_Bans_Community_Title"
 	{
-		"en"	"Joueurs bannis de la communauté Steam"
+		"fr"	"Joueurs bannis de la communauté Steam"
 	}
 	
 	"Command_Bans_Community_NoBan"
 	{
-		"en"	"Aucun joueur n'est banni de la communauté Steam."
+		"fr"	"Aucun joueur n'est banni de la communauté Steam."
 	}
 	
 	"RecentlyBanned"
 	{
 		// {1} = playername | {2} = days ago
 		"#format"	"{1:s},{2:i}"
-		"en"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} a été {red}VAC/Game ban il y a {2} jour(s)"
+		"fr"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} a été {red}VAC/Game ban il y a {2} jour(s)"
 	}
 	
 	"Discord_RecentlyBanned"
 	{
 		// {client} = playername+link | {1} = days ago
 		"#format"	"{1:i}"
-		"en"		"Le joueur {client} a été VAC/Game ban il y a {1} jour(s)"
+		"fr"		"Le joueur {client} a été VAC/Game ban il y a {1} jour(s)"
 	}
 	
 	"Command_Bans_Recent_Title"
 	{
-		"en"	"Joueurs récemment bannis"
+		"fr"	"Joueurs récemment bannis"
 	}
 	
 	"Command_Bans_Recent_NoBan"
 	{
-		"en"	"Aucun joueur n'a été récemment banni."
+		"fr"	"Aucun joueur n'a été récemment banni."
 	}
 	
 	// -----------------------------------------
