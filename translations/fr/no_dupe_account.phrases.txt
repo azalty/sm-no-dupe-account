@@ -100,7 +100,7 @@
 	
 	"Command_NDA_NonPrime"
 	{
-		"en"	"Non Prime"
+		"fr"	"Non Prime"
 	}
 	
 	"Command_NDA_CommunityBans"
@@ -157,19 +157,19 @@
 	
 	"Command_Prime_Title"
 	{
-		"en"	"Joueurs sans le statut Prime"
+		"fr"	"Joueurs sans le statut Prime"
 	}
 	
 	"Command_Prime_NoNonPrime"
 	{
-		"en"	"Aucun joueur est Non Prime"
+		"fr"	"Aucun joueur est Non Prime"
 	}
 	
 	"IsNonPrime"
 	{
 		// {1} = playername
 		"#format"	"{1:s}"
-		"en"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} n'a pas le {red}statut Prime"
+		"fr"		"{darkred}[NDA] {blue}Le joueur {darkblue}{1}{blue} n'a pas le {red}statut Prime"
 	}
 	
 	// -------------------------------------------
