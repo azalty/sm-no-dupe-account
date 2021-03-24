@@ -13,12 +13,12 @@
 	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
 	"Kicked_PrivatePlaytime"
 	{
-		"en"	"You need to display your profile and your playtime publicly. To do this, go to the privacy options of your Steam profile"
+		"en"	"You need to display your profile and your playtime publicly. To do this, go to the privacy options of your Steam Profile"
 	}
 	
 	"Kicked_PrivateProfile"
 	{
-		"en"	"You need to display your profile publicly. To do this, go to the privacy options of your Steam profile"
+		"en"	"You need to display your profile publicly. To do this, go to the privacy options of your Steam Profile"
 	}
 	
 	"Kicked_NotEnoughPlaytime"
@@ -157,7 +157,7 @@
 	
 	"Command_Prime_Title"
 	{
-		"en"	"Non-Prime players"
+		"en"	"Non-Prime Players"
 	}
 	
 	"Command_Prime_NoNonPrime"
