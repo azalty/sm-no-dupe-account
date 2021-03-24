@@ -126,14 +126,14 @@
 	{
 		// {1} = playername | {2} = IP
 		"#format"	"{1:s},{2:s}"
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} seems using a VPN with the IP {red}{2}"
+		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} parece usar uma VPN com o IP {red}{2}"
 	}
 	
 	"Discord_SeemsUsingVPN"
 	{
 		// {client} = playername+link | {1} = IP
 		"#format"	"{1:s}"
-		"pt"		"Player {client} seems using a VPN with the IP {1}"
+		"pt"		"Player {client} parece usar uma VPN com o IP {1}"
 	}
 	
 	"Command_VPN_Title"
@@ -169,7 +169,7 @@
 	{
 		// {1} = playername
 		"#format"	"{1:s}"
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} doesn't have {red}Prime status"
+		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} não tem {red}Status Prime"
 	}
 	
 	// -------------------------------------------
@@ -180,13 +180,13 @@
 	{
 		// {1} = playername
 		"#format"	"{1:s}"
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} is {red}community banned"
+		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} foi {red}banido pela comunidade"
 	}
 	
 	"Discord_IsCommunityBanned"
 	{
 		// {client} = playername+link
-		"pt"		"Player {client} is community banned"
+		"pt"		"Player {client} foi banido pela comunidade"
 	}
 	
 	"Command_Bans_Community_Title"
@@ -203,14 +203,14 @@
 	{
 		// {1} = playername | {2} = days ago
 		"#format"	"{1:s},{2:i}"
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} has been {red}VAC/Game banned {2} day(s) ago"
+		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1} {blue}foi {red}banido VAC/Game {2} dia(s) atrás"
 	}
 	
 	"Discord_RecentlyBanned"
 	{
 		// {client} = playername+link | {1} = days ago
 		"#format"	"{1:i}"
-		"pt"		"Player {client} has been VAC/Game banned {1} day(s) ago"
+		"pt"		"Player {client} foi banido VAC/Game {1} dia(s) atrás"
 	}
 	
 	"Command_Bans_Recent_Title"
