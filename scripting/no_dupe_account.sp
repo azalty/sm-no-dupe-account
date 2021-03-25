@@ -7,13 +7,21 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.3.1"
+#define PLUGIN_VERSION "1.4.0"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
 int g_iVACBans[MAXPLAYERS + 1];
 int g_iGameBans[MAXPLAYERS + 1];
 int g_iLastBan[MAXPLAYERS + 1];
+
+int g_iClientDatabaseStatus[MAXPLAYERS + 1]; // 0 = awaiting check | 1 = checked | 2 = checked and should be updated | 3 = checked and doesn't exist
+int g_iClientDatabasePlaytime[MAXPLAYERS + 1] = -1;
+int g_iClientDatabaseSteamLevel[MAXPLAYERS + 1] = -1;
+int g_iClientDatabaseSteamAge[MAXPLAYERS + 1] = -1;
+int g_iClientDatabaseCSGOLevel[MAXPLAYERS + 1] = -1;
+int g_iClientDatabaseCSGOCoin[MAXPLAYERS + 1] = -1;
+int g_iClientLastCheck[MAXPLAYERS + 1];
 
 bool g_bClientPassedCheck[MAXPLAYERS + 1];
 bool g_bClientPrivatePlaytime[MAXPLAYERS + 1];
@@ -29,18 +37,26 @@ bool g_bDiscordExists;
 
 bool g_bSteamAgeEnabled;
 
+// bool g_bMySQL;		NOT USED AS OF NOW
+bool g_bDatabaseReady;
+
 char g_sSteamAPIKey[33]; // 32+null terminator
 char g_sDiscordWebhook[200]; // idk what size it can go up to, so this should be fine
 char g_sSteamAge[16];
 char g_sHostname[128];
 char g_sRequestURLBuffer[512];
+char g_sSQLBuffer[3096]; // all queries will go into this buffer, to prevent high CPU usage due to the creation of this variable. Higher RAM consumption (but still negligible), lower CPU usage, that's the goal of global buffers.
 
 Handle g_hResourceTimer[MAXPLAYERS + 1];
+Handle g_hDB;
 
 // Cvars
 
 ConVar cvarSteamAPIKey;
 ConVar cvarDiscord;
+ConVar cvarDatabase;
+ConVar cvarDatabaseRefresh;
+ConVar cvarDatabaseExpire;
 ConVar cvarVPN;
 ConVar cvarLevel;
 ConVar cvarPrime;
@@ -75,6 +91,9 @@ public void OnPluginStart()
 	
 	cvarSteamAPIKey = AutoExecConfig_CreateConVar("nda_steamapi_key", "", "(Requires SteamWorks)\nA SteamAPI key that will be used to check playtime\nGet your own at: https://steamcommunity.com/dev/apikey\nThis is a sensitive key, don't share it!\nNeeded to get the playtime or prime status", FCVAR_PROTECTED);
 	cvarDiscord = AutoExecConfig_CreateConVar("nda_discord", "", "(Requires Discord API and SteamWorks)\nDiscord integration with a webhook\nempty = disabled\nwebhook url = enable", FCVAR_PROTECTED);
+	cvarDatabase = AutoExecConfig_CreateConVar("nda_database", "1", "Enable saving player values in a database.\nWill act as a cache, if a player doesn't want to keep is profile public, he can join once while it's public and it won't deny him in the future.\n1 = enabled\n0 = disabled\nDatabase config name: 'no_dupe_account'");
+	cvarDatabaseRefresh = AutoExecConfig_CreateConVar("nda_database_refresh", "1440", "(Requires Database)\nany integer = refresh players values if older than X minutes\n0 = never refresh (recommended if you don't plan on using the DB for other reasons)\nNOTE: Player values will ALWAYS refresh if they are denied, but this will NOT count as a true full refresh");
+	cvarDatabaseExpire = AutoExecConfig_CreateConVar("nda_database_expire", "365", "(Requires Database)\nany integer = players values are deleted if older than X days (using refresh as well is recommended)\n0 = keep player values forever\nNOTE: Deleting really old values of players that don't play anymore is recommended");
 	cvarVPN = AutoExecConfig_CreateConVar("nda_vpn", "1", "(Requires SteamWorks)\n0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
 	cvarLevel = AutoExecConfig_CreateConVar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
 	cvarPrime = AutoExecConfig_CreateConVar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players");
@@ -197,6 +216,18 @@ public void OnConfigsExecuted()
 	if (!g_bSteamAPIKeyAvailable && (cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue))
 	{
 		LogMessage("WARNING: No SteamAPI Key is configured, but Steam Bans method is enabled! Steam Bans requests will NOT work.");
+	}
+	
+	// Database
+	if (cvarDatabase.BoolValue)
+	{
+		if (!SQL_CheckConfig("no_dupe_account"))
+		{
+			LogError("WARNING: Database config 'no_dupe_account' doesn't exist in databases.cfg - Database will be automatically disabled.");
+			cvarDatabase.IntValue = 0;
+		}
+		else
+			SQL_TConnect(OnSQLConnect, "no_dupe_account");
 	}
 }
 
@@ -442,7 +473,6 @@ public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 			{
 				Command_NDA(client, 0);
 			}
-			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
 		}
 		case MenuAction_End:
 		{
@@ -506,7 +536,6 @@ public int PrimeMenu(Menu menu, MenuAction action, int client, int itemNum)
 			{
 				Command_NDA(client, 0);
 			}
-			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
 		}
 		case MenuAction_End:
 		{
@@ -570,7 +599,6 @@ public int CommunityBansMenu(Menu menu, MenuAction action, int client, int itemN
 			{
 				Command_NDA(client, 0);
 			}
-			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
 		}
 		case MenuAction_End:
 		{
@@ -640,7 +668,6 @@ public int RecentBansMenu(Menu menu, MenuAction action, int client, int itemNum)
 			{
 				Command_NDA(client, 0);
 			}
-			//LogMessage("Client %d's menu was cancelled.Reason: %d", client, itemNum); 
 		}
 		case MenuAction_End:
 		{
@@ -663,6 +690,15 @@ void ResetClientVars(int client)
 	g_bCommunityBanned[client] = false;
 	g_bPrime[client] = false;
 	delete g_hResourceTimer[client];
+	
+	// DB
+	g_iClientDatabaseStatus[client] = 0; // 0 = awaiting check | 1 = checked | 2 = checked and should be updated | 3 = checked and doesn't exist
+	g_iClientDatabasePlaytime[client] = -1;
+	g_iClientDatabaseSteamLevel[client] = -1;
+	g_iClientDatabaseSteamAge[client] = -1;
+	g_iClientDatabaseCSGOLevel[client] = -1;
+	g_iClientDatabaseCSGOCoin[client] = -1;
+	g_iClientLastCheck[client] = 0;
 }
 
 public Action Command_CheckMePls(int client, int args)
@@ -677,6 +713,10 @@ public Action Command_CheckMePls(int client, int args)
 
 public void OnClientDisconnect(int client)
 {
+	if (g_iClientDatabaseStatus[client])
+	{
+		InsertUpdatePlayer(client, g_iClientDatabaseCSGOLevel[client], g_iClientDatabaseCSGOCoin[client], g_bPrime[client], g_iClientDatabasePlaytime[client], g_iClientDatabaseSteamLevel[client], g_iClientDatabaseSteamAge[client]);
+	}
 	ResetClientVars(client);
 }
 
@@ -685,6 +725,12 @@ public void OnClientPostAdminCheck(int client)
 {
 	if (IsFakeClient(client)) // exclude bots
 	{
+		return;
+	}
+	
+	if (cvarDatabase.BoolValue && !g_iClientDatabaseStatus[client] && g_bDatabaseReady)
+	{
+		CheckSQLPlayer(client);
 		return;
 	}
 	
@@ -706,36 +752,43 @@ public void OnClientPostAdminCheck(int client)
 		{
 			g_iClientChecksDone[client]++;
 			// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
-			if (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense) // if player is paid prime
+			if (g_bPrime[client] || (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense)) // if player is paid prime
 			{
 				if (!g_bClientPassedCheck[client])
 					PassedCheck(client, "Is Prime");
 				g_bClientPassedCheck[client] = true;
-				g_bPrime[client] = true;
+				g_bPrime[client] = true; // this will set Prime again if got through DB, but we don't care
 			}
 			else
-			{
 				ProcessChecks(client);
-			}
 		}
-		else if ((cvarPrime.IntValue == 2) && (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense))
+		else if ((cvarPrime.IntValue == 2) && !g_bPrime[client] && (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense))
 			g_bPrime[client] = true;
 		
 		if (g_bSteamAPIKeyAvailable)
 		{
 			if (cvarPlaytime.BoolValue)
 			{
-				CheckPlaytime(client);
+				if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabasePlaytime[client] != -1))
+					VerifPlaytime(client, g_iClientDatabasePlaytime[client], true);
+				else
+					CheckPlaytime(client);
 			}
 			
 			if (cvarSteamLevel.BoolValue)
 			{
-				CheckSteamLevel(client);
+				if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabaseSteamLevel[client] != -1))
+					VerifSteamLevel(client, g_iClientDatabaseSteamLevel[client], true);
+				else
+					CheckSteamLevel(client);
 			}
 			
 			if (g_bSteamAgeEnabled)
 			{
-				CheckSteamAge(client);
+				if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabaseSteamAge[client] != -1))
+					VerifSteamAge(client, g_iClientDatabaseSteamAge[client], true);
+				else
+					CheckSteamAge(client);
 			}
 			
 			if (cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue)
@@ -747,6 +800,7 @@ public void OnClientPostAdminCheck(int client)
 	
 	if (cvarLevel.BoolValue || cvarCoin.BoolValue)
 	{
+		// NOTE: It was a pain in the ass to make the DB system effective here, so I just made this
 		// Player resource is never available immediately
 		g_hResourceTimer[client] = CreateTimer(3.0, Timer_GetResource, client, TIMER_REPEAT); // no need to pass userid since OnClientDisconnect() stops the timer
 	}
@@ -755,7 +809,6 @@ public void OnClientPostAdminCheck(int client)
 public Action Timer_GetResource(Handle timer, int client)
 {
 	int resourceEnt = GetPlayerResourceEntity();
-	
 	int level = GetEntProp(resourceEnt, Prop_Send, "m_nPersonaDataPublicLevel", _, client);
 	if (level == -1) // client level is still not available, recheck in 3s
 	{
@@ -766,8 +819,11 @@ public Action Timer_GetResource(Handle timer, int client)
 	
 	if (cvarLevel.BoolValue)
 	{
+		if (level > g_iClientDatabaseCSGOLevel[client])
+			g_iClientDatabaseCSGOLevel[client] = level;
+		
 		g_iClientChecksDone[client]++;
-		if (level >= cvarLevel.IntValue)
+		if (g_iClientDatabaseCSGOLevel[client] >= cvarLevel.IntValue)
 		{
 			if (!g_bClientPassedCheck[client])
 				PassedCheck(client, "Enough CS:GO Level");
@@ -783,6 +839,8 @@ public Action Timer_GetResource(Handle timer, int client)
 	{
 		int activeCoin = GetEntProp(resourceEnt, Prop_Send, "m_nActiveCoinRank", _, client);
 		if (activeCoin)
+			g_iClientDatabaseCSGOCoin[client] = activeCoin;
+		if (g_iClientDatabaseCSGOCoin[client])
 		{
 			if (cvarCoin.IntValue == 1)
 			{
@@ -821,13 +879,13 @@ void CheckIP(int client, char[] ip, bool dontNotify = false)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public int OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid, bool dontNotify)
+public void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid, bool dontNotify)
 {
 	int client = GetClientOfUserId(userid);
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogMessage("Check IP request failed!");
+		LogError("Check IP request failed!");
 		if ((cvarVPN.IntValue == 2) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -951,13 +1009,13 @@ void CheckPlaytime(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+public void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogMessage("Playtime request failed!");
+		LogError("Playtime request failed!");
 		if ((cvarPlaytime.IntValue > 0) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1001,6 +1059,21 @@ public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequest
 		}
 	}
 	
+	if (g_iClientDatabaseStatus[client] == 2)
+	{
+		if (g_iClientDatabasePlaytime[client] < iPlayTime)
+			g_iClientDatabasePlaytime[client] = iPlayTime;
+		else
+			iPlayTime = g_iClientDatabasePlaytime[client];
+	}
+	else if (g_iClientDatabaseStatus[client] == 3)
+		g_iClientDatabasePlaytime[client] = iPlayTime;
+	
+	VerifPlaytime(client, iPlayTime, false);
+}
+
+void VerifPlaytime(int client, int iPlayTime, bool database)
+{
 	int requiredTime = cvarPlaytime.IntValue;
 	bool kick;
 	if (requiredTime < 0)
@@ -1011,6 +1084,11 @@ public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequest
 	
 	if (iPlayTime <= 0) // 0 could also be that the player just started playing, but it will also appear if games are visible but not playtime
 	{
+		if (database)
+		{
+			CheckPlaytime(client);
+			return;
+		}
 		if (kick)
 		{
 			KickClient(client, "%t", "Kicked_PrivatePlaytime");
@@ -1024,6 +1102,11 @@ public int OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequest
 	}
 	else if (iPlayTime < requiredTime)
 	{
+		if (database)
+		{
+			CheckPlaytime(client);
+			return;
+		}
 		if (kick)
 		{
 			int hours = requiredTime / 60;
@@ -1076,13 +1159,13 @@ void CheckSteamLevel(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+public void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogMessage("Steam Level request failed!");
+		LogError("Steam Level request failed!");
 		if ((cvarSteamLevel.IntValue > 0) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1119,6 +1202,21 @@ public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bReque
 		iSteamLevel = StringToInt(sBody);
 	}
 	
+	if (g_iClientDatabaseStatus[client] == 2)
+	{
+		if (g_iClientDatabaseSteamLevel[client] < iSteamLevel)
+			g_iClientDatabaseSteamLevel[client] = iSteamLevel;
+		else
+			iSteamLevel = g_iClientDatabaseSteamLevel[client];
+	}
+	else if (g_iClientDatabaseStatus[client] == 3)
+		g_iClientDatabasePlaytime[client] = iSteamLevel;
+	
+	VerifSteamLevel(client, iSteamLevel, false);
+}
+
+void VerifSteamLevel(int client, int iSteamLevel, bool database)
+{
 	int requiredLevel = cvarSteamLevel.IntValue;
 	bool kick;
 	if (requiredLevel < 0)
@@ -1129,6 +1227,11 @@ public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bReque
 	
 	if (iSteamLevel == -1)
 	{
+		if (database)
+		{
+			CheckSteamLevel(client);
+			return;
+		}
 		if (kick)
 		{
 			KickClient(client, "%t", "Kicked_PrivateProfile");
@@ -1142,6 +1245,11 @@ public int OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bReque
 	}
 	else if (iSteamLevel < requiredLevel)
 	{
+		if (database)
+		{
+			CheckSteamLevel(client);
+			return;
+		}
 		if (kick)
 		{
 			KickClient(client, "%t", "Kicked_NotEnoughSteamLevel", requiredLevel);
@@ -1174,11 +1282,10 @@ void CheckSteamAge(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
-{
-	int iMode = 0; // 0 = positive, 1 = negative, 2 = '~'
-	int iRequiredAge;
-	
+// sets iMode to the correct mode: 0 = positive, 1 = negative, 2 = '~'
+// sets iRequiredAge to the required age
+void RetrieveSteamAgeMode(int& iMode, int& iRequiredAge)
+{	
 	if (StrContains(g_sSteamAge, "~") != -1)
 	{
 		iMode = 2;
@@ -1193,12 +1300,17 @@ public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequest
 			iRequiredAge = -iRequiredAge;
 		}
 	}
-	
+}
+
+public void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+{
 	int client = GetClientOfUserId(userid);
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogMessage("Steam Age request failed!");
+		LogError("Steam Age request failed!");
+		int iMode, iRequiredAge;
+		RetrieveSteamAgeMode(iMode, iRequiredAge);
 		if (!iMode && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1238,8 +1350,31 @@ public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequest
 		iSteamAge /= 60; // returns age in minutes, rounds to zero (iSteamAge is an integer)
 	}
 	
+	if (g_iClientDatabaseStatus[client] == 2)
+	{
+		if (g_iClientDatabaseSteamAge[client] < iSteamAge)
+			g_iClientDatabaseSteamAge[client] = iSteamAge;
+		else
+			iSteamAge = g_iClientDatabaseSteamAge[client];
+	}
+	else if (g_iClientDatabaseStatus[client] == 3)
+		g_iClientDatabasePlaytime[client] = iSteamAge;
+	
+	VerifSteamAge(client, iSteamAge, false);
+}
+
+void VerifSteamAge(int client, int iSteamAge, bool database)
+{
+	int iMode, iRequiredAge;
+	RetrieveSteamAgeMode(iMode, iRequiredAge);
+	
 	if (iSteamAge == -1)
 	{
+		if (database)
+		{
+			CheckSteamAge(client);
+			return;
+		}
 		switch (iMode)
 		{
 			case 0:
@@ -1255,6 +1390,11 @@ public int OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequest
 	}
 	else if (iSteamAge < iRequiredAge)
 	{
+		if (database)
+		{
+			CheckSteamAge(client);
+			return;
+		}
 		if (!iMode)
 		{
 			g_iClientChecksDone[client]++;
@@ -1287,11 +1427,11 @@ void CheckSteamBans(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public int OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+public void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogMessage("Steam Bans request failed!");
+		LogError("Steam Bans request failed!");
 		delete hRequest;
 		return;
 	}
@@ -1434,3 +1574,226 @@ void SendDiscordMessage(char[] title, char[] message, int client=0)
 	hook.Embed(embed);
 	hook.Send();
 }
+
+public void OnSQLConnect(Handle owner, Handle hndl, char[] error, any data)
+{
+	if (!hndl)
+	{
+		LogError("ERROR: The database doesn't work: Database failure: %s", error);
+		cvarDatabase.IntValue = 0;
+	}
+	else
+	{
+		g_hDB = hndl;
+		
+		/* NOT USED AS OF NOW
+		DBDriver driver = view_as<DBDriver>(SQL_ReadDriver(g_hDB));
+		driver.GetIdentifier(g_sSQLBuffer, sizeof(g_sSQLBuffer)); // returns "mysql" or "sqlite"
+		if (StrEqual(g_sSQLBuffer, "mysql"))
+			g_bMySQL = true;
+		*/
+		
+		UpdateDatabase();
+	}
+}
+
+// Create tables, fix older syntaxes (if any)...
+// Meant for upgrading from the very first version to the latest one seemlessly
+// Going the other way around will NOT work and might break the DB (although unlikely), proceed with caution.
+void UpdateDatabase()
+{
+	// SQLite syntax, but seems valid for MySQL too
+	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "CREATE TABLE IF NOT EXISTS players("
+												... "steamid varchar(32) PRIMARY KEY NOT NULL, "
+												... "csgo_level INTEGER NOT NULL, "
+												... "csgo_coin INTEGER NOT NULL, "
+												... "prime INTEGER NOT NULL, "
+												... "csgo_playtime INTEGER NOT NULL, "
+												... "steam_level INTEGER NOT NULL, "
+												... "steam_age INTEGER NOT NULL, "
+												... "last_check INTEGER NOT NULL)");
+	SQL_TQuery(g_hDB, OnDatabaseUpdated, g_sSQLBuffer);
+	
+	/* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
+	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "PRAGMA table_info(players)");
+	SQL_TQuery(g_hDB, OnGetColumnsResponse, g_sSQLBuffer);
+	*/
+}
+
+public void OnDatabaseUpdated(Handle owner, Handle hndl, char[] error, any data)
+{
+	if (!hndl)
+	{
+		LogError("'UpdateDatabase' Query failure: %s", error);
+		SetFailState("'UpdateDatabase' Query failure, check your logs");
+	}
+	
+	if (cvarDatabaseExpire.BoolValue)
+	{
+		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "DELETE FROM players WHERE last_check < %i", GetTime() - (cvarDatabaseExpire.IntValue * 60 * 60 * 24));
+		SQL_TQuery(g_hDB, SQL_NullCallback, g_sSQLBuffer);
+	}
+	
+	g_bDatabaseReady = true;
+}
+
+public void SQL_NullCallback(Handle owner, Handle hndl, char[] error, any data)
+{
+	if (!hndl)
+	{
+		LogError("Query failure: %s", error);
+	}
+}
+
+void CheckSQLPlayer(int client)
+{
+	char steamid[32];
+	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+	
+	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "SELECT last_check FROM players WHERE steamid = '%s'", steamid);
+	SQL_TQuery(g_hDB, OnCheckSQLPlayer, g_sSQLBuffer, GetClientUserId(client));
+}
+
+public void OnCheckSQLPlayer(Handle owner, Handle hndl, char [] error, any data)
+{
+	int client = GetClientOfUserId(data);
+	
+	/* Make sure the client didn't disconnect while the thread was running */
+	
+	if (!client)
+		return;
+	
+	if (!hndl)
+	{
+		LogError("'CheckSQLPlayer' Query failure: %s", error);
+		return;
+	}
+	
+	if (!SQL_GetRowCount(hndl) || !SQL_FetchRow(hndl)) 
+	{
+		g_iClientDatabaseStatus[client] = 3; // doesn't exist
+		OnClientPostAdminCheck(client);
+		return;
+	}
+	
+	g_iClientLastCheck[client] = SQL_FetchInt(hndl, 0);
+	
+	char steamid[32];
+	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+	
+	if (cvarDatabaseExpire.BoolValue && (g_iClientLastCheck[client] < (GetTime() - (cvarDatabaseExpire.IntValue * 60 * 60 * 24))))
+	{
+		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "DELETE FROM players WHERE steamid = '%s'", steamid);
+		SQL_TQuery(g_hDB, SQL_NullCallback, g_sSQLBuffer);
+		g_iClientDatabaseStatus[client] = 3; // doesn't exist
+		OnClientPostAdminCheck(client);
+		return;
+	}
+	
+	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "SELECT csgo_level, "
+												... "csgo_coin, "
+												... "prime, "
+												... "csgo_playtime, "
+												... "steam_level, "
+												... "steam_age "
+												... "FROM players WHERE steamid = '%s'", steamid);
+	SQL_TQuery(g_hDB, OnCheckSQLPlayer2, g_sSQLBuffer, GetClientUserId(client));
+}
+
+public void OnCheckSQLPlayer2(Handle owner, Handle hndl, char [] error, any data)
+{
+	int client = GetClientOfUserId(data);
+	
+	/* Make sure the client didn't disconnect while the thread was running */
+	
+	if (!client)
+		return;
+	
+	if (!hndl)
+	{
+		LogError("'CheckSQLPlayer2' Query failure: %s", error);
+		return;
+	}
+	
+	g_iClientDatabaseCSGOLevel[client] = SQL_FetchInt(hndl, 0);
+	g_iClientDatabaseCSGOCoin[client] = SQL_FetchInt(hndl, 1);
+	g_bPrime[client] = !!SQL_FetchInt(hndl, 2); // !!int converts it to bool
+	g_iClientDatabasePlaytime[client] = SQL_FetchInt(hndl, 3);
+	g_iClientDatabaseSteamLevel[client] = SQL_FetchInt(hndl, 4);
+	g_iClientDatabaseSteamAge[client] = SQL_FetchInt(hndl, 5);
+	
+	if (cvarDatabaseRefresh.BoolValue && (g_iClientLastCheck[client] < (GetTime() - (cvarDatabaseRefresh.IntValue * 60))))
+		g_iClientDatabaseStatus[client] = 2;
+	else
+		g_iClientDatabaseStatus[client] = 1;
+	
+	OnClientPostAdminCheck(client);
+}
+
+void InsertUpdatePlayer(int client, int csgo_level, int csgo_coin, bool prime, int csgo_playtime, int steam_level, int steam_age)
+{
+	char steamid[32];
+	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+	
+	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "REPLACE INTO players("
+												... "steamid, "
+												... "csgo_level, "
+												... "csgo_coin, "
+												... "prime, "
+												... "csgo_playtime, "
+												... "steam_level, "
+												... "steam_age, "
+												... "last_check) "
+												... "VALUES("
+												... "'%s', "
+												... "'%i', "
+												... "'%i', "
+												... "'%i', "
+												... "'%i', "
+												... "'%i', "
+												... "'%i', "
+												... "'%i')", steamid, csgo_level, csgo_coin, prime, csgo_playtime, steam_level, steam_age, (g_iClientDatabaseStatus[client] == 1) ? g_iClientLastCheck[client] : GetTime()); // Keep old last_check, else update it. Only update it if status != 1
+	SQL_TQuery(g_hDB, SQL_NullCallback, g_sSQLBuffer);
+}
+
+/* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
+
+// Checks if a table exists
+stock void ColumnExists(char[] column)
+{
+	if (g_bMySQL)
+	{
+		
+		
+	}
+	else
+	{
+		// table exists?: Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='%s')", table);
+		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "PRAGMA table_info('%s')", column);
+	}
+	SQL_TQuery(g_hDB, OnTableExistsResponse, g_sSQLBuffer, table);
+}
+
+public void OnGetColumnsResponse(Handle owner, Handle hndl, char[] error, any data)
+{
+	if (!hndl)
+	{
+		LogError("'GetColumns' Query failure: %s", error);
+		SetFailState("'GetColumns' Query failure, check your logs");
+	}
+	if (g_bMySQL)
+	{
+		
+		
+	}
+	else
+	{
+		char tableName[32];
+		while (SQL_FetchRow(g_hDB))
+		{
+			SQL_FetchString(g_hDB, 1, tableName, sizeof(tableName));
+			if (StrEqual())
+		}
+	}	
+}
+*/
