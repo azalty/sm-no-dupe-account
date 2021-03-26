@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.0"
+#define PLUGIN_VERSION "1.4.1b"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -1059,15 +1059,13 @@ public void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bReques
 		}
 	}
 	
-	if (g_iClientDatabaseStatus[client] == 2)
+	if (g_iClientDatabaseStatus[client])
 	{
 		if (g_iClientDatabasePlaytime[client] < iPlayTime)
 			g_iClientDatabasePlaytime[client] = iPlayTime;
 		else
 			iPlayTime = g_iClientDatabasePlaytime[client];
 	}
-	else if (g_iClientDatabaseStatus[client] == 3)
-		g_iClientDatabasePlaytime[client] = iPlayTime;
 	
 	VerifPlaytime(client, iPlayTime, false);
 }
@@ -1202,15 +1200,13 @@ public void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequ
 		iSteamLevel = StringToInt(sBody);
 	}
 	
-	if (g_iClientDatabaseStatus[client] == 2)
+	if (g_iClientDatabaseStatus[client])
 	{
 		if (g_iClientDatabaseSteamLevel[client] < iSteamLevel)
 			g_iClientDatabaseSteamLevel[client] = iSteamLevel;
 		else
 			iSteamLevel = g_iClientDatabaseSteamLevel[client];
 	}
-	else if (g_iClientDatabaseStatus[client] == 3)
-		g_iClientDatabasePlaytime[client] = iSteamLevel;
 	
 	VerifSteamLevel(client, iSteamLevel, false);
 }
@@ -1350,15 +1346,13 @@ public void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bReques
 		iSteamAge /= 60; // returns age in minutes, rounds to zero (iSteamAge is an integer)
 	}
 	
-	if (g_iClientDatabaseStatus[client] == 2)
+	if (g_iClientDatabaseStatus[client])
 	{
 		if (g_iClientDatabaseSteamAge[client] < iSteamAge)
 			g_iClientDatabaseSteamAge[client] = iSteamAge;
 		else
 			iSteamAge = g_iClientDatabaseSteamAge[client];
 	}
-	else if (g_iClientDatabaseStatus[client] == 3)
-		g_iClientDatabasePlaytime[client] = iSteamAge;
 	
 	VerifSteamAge(client, iSteamAge, false);
 }
