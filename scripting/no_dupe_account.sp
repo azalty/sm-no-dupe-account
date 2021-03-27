@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.1b"
+#define PLUGIN_VERSION "1.4.1"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -79,7 +79,7 @@ public Plugin myinfo =
 	author = "azalty/rlevet",
 	description = "Prevents duplicated or new accounts from accessing the server",
 	version = PLUGIN_VERSION,
-	url = "github.com/rlevet/sm-no-dupe-account"
+	url = "github.com/azalty/sm-no-dupe-account"
 }
 
 public void OnPluginStart()
