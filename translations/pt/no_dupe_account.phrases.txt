@@ -25,14 +25,12 @@
 	{
 		// {1} = time formatting, see category 'TIME FORMATTING' below for more info
 		// If you want, you can remove {1} and put your own phrase according to your config
-		"#format"	"{1:t}"
 		"pt"		"Você deve ter jogado CS:GO pelo menos {1} para se conectar ao servidor"
 	}
 	
 	"Kicked_NotEnoughSteamLevel"
 	{
 		// {1} = minimum level required
-		"#format"	"{1:i}"
 		"pt"		"Você deve ter pelo menos Nível {1} ​​na Steam para se conectar ao servidor"
 	}
 	
@@ -125,14 +123,12 @@
 	"SeemsUsingVPN"
 	{
 		// {1} = playername | {2} = IP
-		"#format"	"{1:s},{2:s}"
 		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} parece usar uma VPN com o IP {red}{2}"
 	}
 	
 	"Discord_SeemsUsingVPN"
 	{
 		// {client} = playername+link | {1} = IP
-		"#format"	"{1:s}"
 		"pt"		"Player {client} parece usar uma VPN com o IP {1}"
 	}
 	
@@ -168,7 +164,6 @@
 	"IsNonPrime"
 	{
 		// {1} = playername
-		"#format"	"{1:s}"
 		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} não tem {red}Status Prime"
 	}
 	
@@ -179,7 +174,6 @@
 	"IsCommunityBanned"
 	{
 		// {1} = playername
-		"#format"	"{1:s}"
 		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} foi {red}banido pela comunidade"
 	}
 	
@@ -202,14 +196,12 @@
 	"RecentlyBanned"
 	{
 		// {1} = playername | {2} = days ago
-		"#format"	"{1:s},{2:i}"
 		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1} {blue}foi {red}banido VAC/Game {2} dia(s) atrás"
 	}
 	
 	"Discord_RecentlyBanned"
 	{
 		// {client} = playername+link | {1} = days ago
-		"#format"	"{1:i}"
 		"pt"		"Player {client} foi banido VAC/Game {1} dia(s) atrás"
 	}
 	
@@ -230,14 +222,12 @@
 	"Time_HoursAndMins"
 	{
 		// {1} = playtime in hours | {2} = playtime in minutes
-		"#format"	"{1:i},{2:i}"
 		"pt"		"{1} horas e {2} minutos"
 	}
 	
 	"Time_Hours"
 	{
 		// {1} = playtime in hours
-		"#format"	"{1:i}"
 		"pt"		"{1} horas"
 	}
 	
@@ -249,7 +239,6 @@
 	"Time_Mins"
 	{
 		// {1} = playtime in minutes
-		"#format"	"{1:i}"
 		"pt"		"{1} minutos"
 	}
 	

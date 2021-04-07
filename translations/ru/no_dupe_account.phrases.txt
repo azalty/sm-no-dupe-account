@@ -1,0 +1,258 @@
+"Phrases"
+{
+	// ---------------------------------
+	// 			KICK MESSAGES
+	// ---------------------------------
+	
+	"Kicked_FailedChecks"
+	{
+		"ru"	"Ваш аккаунт слишком подозрительный и недавно созданный, попробуйте играть больше в официальных режимах игры!"
+	}
+	
+	// If client has failed all his checks and has a private playtime (and playtime is a check), ask them to show it.
+	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
+	"Kicked_PrivatePlaytime"
+	{
+		"ru"	"Вам необходимо открыть свой профиль и ваше игровое время публично. Для этого перейдите к параметрам приватности вашего профиля Steam."
+	}
+	
+	"Kicked_PrivateProfile"
+	{
+		"ru"	"Вы должны показать свой профиль публично. Для этого перейдите к параметрам приватности вашего профиля Steam."
+	}
+	
+	"Kicked_NotEnoughPlaytime"
+	{
+		// {1} = time formatting, see category 'TIME FORMATTING' below for more info
+		// If you want, you can remove {1} and put your own phrase according to your config
+		"ru"		"Вы должны были сыграть в CS:GO как минимум {1} для подключения к серверу."
+	}
+	
+	"Kicked_NotEnoughSteamLevel"
+	{
+		// {1} = minimum level required
+		"ru"		"Вы должны быть как минимум уровня {1} Steam для подключения к серверу."
+	}
+	
+	// Warning, you shouldn't kick for VPNs as these can cause false positives.
+	// A detection is done if the IP belongs to a corporation that doesn't give residential IPs
+	// AKA you can get a detection while you are at work OR if you are using an IP that is not from your home
+	// You can also get other false positives, but I didn't make this system so I'm not able to provide more infos
+	// -
+	// Players should also be free to play with VPNs, but we know that they are most of the time used for illegal stuff
+	// I do not recommend kicking for this or setting this as a check, since most of the people will NOT use a VPN and get on the server, and those who use them aren't always bad people!
+	// Just set it to 0 or 1 and you should be fine.
+	"Kicked_VPN"
+	{
+		"ru"	"Играть на сервере с VPN запрещено, отключите VPN или ваш прокси-сервер для подключения к серверу."
+	}
+	
+	"Kicked_SteamAccountTooRecent"
+	{
+		"ru"	"Ваш аккаунт Steam был создан слишком недавно. Из соображений безопасности вы не можете подключиться к серверу."
+	}
+	
+	"Kicked_NoCoin"
+	{
+		"ru"	"Вы должны отобразить монету на вашем профиле CS:GO, чтобы подключиться к серверу."
+	}
+	
+	"Kicked_Bans_VAC"
+	{
+		"ru"	"Учётные записи, которые уже были заблокированы VAC - запрещены."
+	}
+	
+	"Kicked_Bans_VAC_multiple"
+	{
+		"ru"	"Учётные записи, которые уже были многократно заблокированы VAC - запрещены."
+	}
+	
+	"Kicked_Bans_Game"
+	{
+		"ru"	"Учётные записи, которые уже были заблокированы в игре - запрещены."
+	}
+	
+	"Kicked_Bans_Game_multiple"
+	{
+		"ru"	"Учётные записи, которые уже несколько раз были заблокированы в игре - запрещены."
+	}
+	
+	"Kicked_Bans_Community"
+	{
+		"ru"	"Учётные записи, которые имеют блокировку в сообществе - запрещены."
+	}
+	
+	"Kicked_Bans_Recent"
+	{
+		"ru"	"Недавно вы были заблокированы VAC или в самой игре. В качестве меры безопасности вы пока не можете присоединиться к серверу."
+	}
+	
+	// ---------------------------------------
+	// 				NDA COMMAND
+	// ---------------------------------------
+	
+	"Command_NDA_NoMenu"
+	{
+		"ru"	"Извините, но похоже, что меню не включено, измените настройки, чтобы добавить немного."
+	}
+	
+	"Command_NDA_NonPrime"
+	{
+		"ru"	"Без прайм-статуса"
+	}
+	
+	"Command_NDA_CommunityBans"
+	{
+		"ru"	"Блокировок в сообществе"
+	}
+	
+	"Command_NDA_RecentBans"
+	{
+		"ru"	"Недавние блокировки"
+	}
+	
+	"Command_NDA_PlayerDisconnected"
+	{
+		"ru"	"{darkred}[NDA] {lightblue}Упс, похоже, игрок отключился!"
+	}
+	
+	// ---------------------------------------
+	// 				VPN MESSAGES
+	// ---------------------------------------
+	
+	"SeemsUsingVPN"
+	{
+		// {1} = playername | {2} = IP
+		"ru"		"{darkred}[NDA] {blue}Игрок {darkblue}{1}{blue} кажется, использует VPN с IP {red}{2}"
+	}
+	
+	"Discord_SeemsUsingVPN"
+	{
+		// {client} = playername+link | {1} = IP
+		"ru"		"Игрок {client} кажется, использует VPN с IP {1}"
+	}
+	
+	"Command_VPN_Title"
+	{
+		"ru"	"Игроки, у которых потенциально есть VPN"
+	}
+	
+	"Command_VPN_Recheck"
+	{
+		"ru"	"Перепроверка IP-адреса игроков"
+	}
+	
+	"Command_VPN_NoVPN"
+	{
+		"ru"	"Похоже, что ни один игрок не использует VPN."
+	}
+	
+	// ---------------------------------------
+	// 				PRIME MESSAGES
+	// ---------------------------------------
+	
+	"Command_Prime_Title"
+	{
+		"ru"	"Игроки без прайм-статуса"
+	}
+	
+	"Command_Prime_NoNonPrime"
+	{
+		"ru"	"Ни один игрок не без прайм-статуса"
+	}
+	
+	"IsNonPrime"
+	{
+		// {1} = playername
+		"ru"		"{darkred}[NDA] {blue}Игрок {darkblue}{1}{blue} не имеет {red}прайм-статус"
+	}
+	
+	// -------------------------------------------
+	// 				STEAM BAN MESSAGES
+	// -------------------------------------------
+	
+	"IsCommunityBanned"
+	{
+		// {1} = playername
+		"ru"		"{darkred}[NDA] {blue}Игрок {darkblue}{1}{blue} имеет {red}блокировку в сообществе"
+	}
+	
+	"Discord_IsCommunityBanned"
+	{
+		// {client} = playername+link
+		"ru"	"Игрок {client} имеет блокировку в сообществе"
+	}
+	
+	"Command_Bans_Community_Title"
+	{
+		"ru"	"Игроки, которые не имеют блокировку в сообществе"
+	}
+	
+	"Command_Bans_Community_NoBan"
+	{
+		"ru"	"Ни один игрок не имеет блокировку в сообществе."
+	}
+	
+	"RecentlyBanned"
+	{
+		// {1} = playername | {2} = days ago
+		"ru"		"{darkred}[NDA] {blue}Игрок {darkblue}{1}{blue} был {red}заблокирован в игре/VAC {2} д. назад"
+	}
+	
+	"Discord_RecentlyBanned"
+	{
+		// {client} = playername+link | {1} = days ago
+		"ru"		"Игрок {client} был заблокирован в игре/VAC {1} д. назад"
+	}
+	
+	"Command_Bans_Recent_Title"
+	{
+		"ru"	"Игроки, которые недавно были заблокированы"
+	}
+	
+	"Command_Bans_Recent_NoBan"
+	{
+		"ru"	"Недавно ни один игрок не был заюлокирован."
+	}
+	
+	// -----------------------------------------
+	//				TIME FORMATTING
+	// -----------------------------------------
+	
+	"Time_HoursAndMins"
+	{
+		// {1} = playtime in hours | {2} = playtime in minutes
+		"ru"		"{1} ч. и {2} мин."
+	}
+	
+	"Time_Hours"
+	{
+		// {1} = playtime in hours
+		"ru"		"{1} ч."
+	}
+	
+	"Time_Hour"
+	{
+		"ru"	"1 час"
+	}
+	
+	"Time_Mins"
+	{
+		// {1} = playtime in minutes
+		"ru"		"{1} мин."
+	}
+	
+	// -------------------------------------------
+	//				DISCORD MESSAGES
+	// -------------------------------------------
+	
+	"Discord_Alert"
+	{
+		"ru"	"Внимание:"
+	}
+	
+	"Discord_Server"
+	{
+		"ru"	"Сервер:"
+	}
+}
