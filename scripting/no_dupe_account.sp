@@ -1709,6 +1709,8 @@ public void OnCheckSQLPlayer2(Handle owner, Handle hndl, char [] error, any data
 		return;
 	}
 	
+	SQL_FetchRow(hndl); // row should always exist
+	
 	g_iClientDatabaseCSGOLevel[client] = SQL_FetchInt(hndl, 0);
 	g_iClientDatabaseCSGOCoin[client] = SQL_FetchInt(hndl, 1);
 	g_bPrime[client] = !!SQL_FetchInt(hndl, 2); // !!int converts it to bool
