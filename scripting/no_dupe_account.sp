@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.1"
+#define PLUGIN_VERSION "1.4.2b"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -20,7 +20,7 @@ int g_iClientDatabasePlaytime[MAXPLAYERS + 1] = -1;
 int g_iClientDatabaseSteamLevel[MAXPLAYERS + 1] = -1;
 int g_iClientDatabaseSteamAge[MAXPLAYERS + 1] = -1;
 int g_iClientDatabaseCSGOLevel[MAXPLAYERS + 1] = -1;
-int g_iClientDatabaseCSGOCoin[MAXPLAYERS + 1] = -1;
+int g_iClientDatabaseCSGOCoin[MAXPLAYERS + 1];
 int g_iClientLastCheck[MAXPLAYERS + 1];
 
 bool g_bClientPassedCheck[MAXPLAYERS + 1];
@@ -697,7 +697,7 @@ void ResetClientVars(int client)
 	g_iClientDatabaseSteamLevel[client] = -1;
 	g_iClientDatabaseSteamAge[client] = -1;
 	g_iClientDatabaseCSGOLevel[client] = -1;
-	g_iClientDatabaseCSGOCoin[client] = -1;
+	g_iClientDatabaseCSGOCoin[client] = 0;
 	g_iClientLastCheck[client] = 0;
 }
 
