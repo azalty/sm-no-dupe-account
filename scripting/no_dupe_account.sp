@@ -840,7 +840,7 @@ public Action Timer_GetResource(Handle timer, int client)
 		int activeCoin = GetEntProp(resourceEnt, Prop_Send, "m_nActiveCoinRank", _, client);
 		if (activeCoin)
 			g_iClientDatabaseCSGOCoin[client] = activeCoin;
-		if (g_iClientDatabaseCSGOCoin[client])
+		if (g_iClientDatabaseCSGOCoin[client] > 0) // Coin could previously be set to -1
 		{
 			if (cvarCoin.IntValue == 1)
 			{
