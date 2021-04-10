@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.2"
+#define PLUGIN_VERSION "1.4.3"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -133,6 +133,7 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
+	g_iChecks = 0;
 	cvarSteamAPIKey.GetString(g_sSteamAPIKey, sizeof(g_sSteamAPIKey));
 	cvarDiscord.GetString(g_sDiscordWebhook, sizeof(g_sDiscordWebhook));
 	cvarSteamAge.GetString(g_sSteamAge, sizeof(g_sSteamAge));
@@ -219,7 +220,7 @@ public void OnConfigsExecuted()
 	}
 	
 	// Database
-	if (cvarDatabase.BoolValue)
+	if (cvarDatabase.BoolValue && !g_bDatabaseReady)
 	{
 		if (!SQL_CheckConfig("no_dupe_account"))
 		{
