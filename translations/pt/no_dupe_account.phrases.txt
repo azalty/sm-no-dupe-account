@@ -6,19 +6,19 @@
 	
 	"Kicked_FailedChecks"
 	{
-		"pt"	"Sua conta é muito suspeita e recente, tente jogar mais nos modos de jogo oficiais!"
+		"pt"	"Sua conta é muito recente e suspeita, jogue mais os modos de jogo oficiais"
 	}
 	
 	// If client has failed all his checks and has a private playtime (and playtime is a check), ask them to show it.
 	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
 	"Kicked_PrivatePlaytime"
 	{
-		"pt"	"Você precisa exibir seu perfil steam e seu tempo de jogo publicamente"
+		"pt"	"Deixe seu perfil steam e seu tempo de jogo público. Para alterar vá para as opções de privacidade do seu Perfil Steam"
 	}
 	
 	"Kicked_PrivateProfile"
 	{
-		"pt"	"Você precisa exibir seu perfil steam publicamente"
+		"pt"	"Deixe seu perfil steam público. Para alterar vá para as opções de privacidade do seu Perfil Steam"
 	}
 	
 	"Kicked_NotEnoughPlaytime"
