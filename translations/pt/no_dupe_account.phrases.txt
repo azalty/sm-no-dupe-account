@@ -13,12 +13,12 @@
 	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
 	"Kicked_PrivatePlaytime"
 	{
-		"pt"	"Você precisa exibir seu perfil e seu tempo de jogo publicamente. Para fazer isso, vá para as opções de privacidade do seu Perfil Steam"
+		"pt"	"Você precisa exibir seu perfil steam e seu tempo de jogo publicamente"
 	}
 	
 	"Kicked_PrivateProfile"
 	{
-		"pt"	"Você precisa exibir seu perfil publicamente. Para fazer isso, vá para as opções de privacidade do seu Perfil Steam"
+		"pt"	"Você precisa exibir seu perfil steam publicamente"
 	}
 	
 	"Kicked_NotEnoughPlaytime"
@@ -144,7 +144,7 @@
 	
 	"Command_VPN_NoVPN"
 	{
-		"pt"		"Nenhum player parece estar usando uma VPN."
+		"pt"		"Nenhum player parece estar usando uma VPN"
 	}
 	
 	// ---------------------------------------
@@ -190,7 +190,7 @@
 	
 	"Command_Bans_Community_NoBan"
 	{
-		"pt"		"Nenhum player foi banido pela comunidade."
+		"pt"		"Nenhum player foi banido pela comunidade"
 	}
 	
 	"RecentlyBanned"
@@ -212,7 +212,7 @@
 	
 	"Command_Bans_Recent_NoBan"
 	{
-		"pt"		"Nenhum player foi banido recentemente."
+		"pt"		"Nenhum player foi banido recentemente"
 	}
 	
 	// -----------------------------------------
