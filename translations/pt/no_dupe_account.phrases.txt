@@ -158,7 +158,7 @@
 	
 	"Command_Prime_NoNonPrime"
 	{
-		"pt"	"No player is Non-Prime"
+		"pt"	"Nenhum player é Non-Prime"
 	}
 	
 	"IsNonPrime"
