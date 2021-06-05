@@ -6,7 +6,7 @@
 	
 	"Kicked_FailedChecks"
 	{
-		"pt"	"Sua conta é muito recente e suspeita, jogue mais os modos de jogo oficiais"
+		"pt"	"Sua conta é muito recente e suspeita, jogue mais os modos de jogo oficiais da Valve"
 	}
 	
 	// If client has failed all his checks and has a private playtime (and playtime is a check), ask them to show it.
@@ -25,13 +25,13 @@
 	{
 		// {1} = time formatting, see category 'TIME FORMATTING' below for more info
 		// If you want, you can remove {1} and put your own phrase according to your config
-		"pt"		"Você deve ter jogado CS:GO pelo menos {1} para se conectar ao servidor"
+		"pt"	"Você deve ter jogado CS:GO pelo menos {1} para se conectar ao servidor"
 	}
 	
 	"Kicked_NotEnoughSteamLevel"
 	{
 		// {1} = minimum level required
-		"pt"		"Você deve ter pelo menos Nível {1} ​​na Steam para se conectar ao servidor"
+		"pt"	"Você deve ter pelo menos Nível {1} ​​na Steam para se conectar ao servidor"
 	}
 	
 	// Warning, you shouldn't kick for VPNs as these can cause false positives.
@@ -59,32 +59,32 @@
 	
 	"Kicked_Bans_VAC"
 	{
-		"pt"	"Contas que já foram banidas do VAC são proibidas"
+		"pt"	"Contas com VAC Ban são proibidas de se conectar ao servidor"
 	}
 	
 	"Kicked_Bans_VAC_multiple"
 	{
-		"pt"	"Contas que já foram banidas do VAC várias vezes são proibidas"
+		"pt"	"Contas com VAC Bans são proibidas de se conectar ao servidor"
 	}
 	
 	"Kicked_Bans_Game"
 	{
-		"pt"	"Contas que já foram banidas do jogo são proibidas"
+		"pt"	"Contas com Game Ban são proibidas de se conectar ao servidor"
 	}
 	
 	"Kicked_Bans_Game_multiple"
 	{
-		"pt"	"Contas que já foram banidas do jogo várias vezes são proibidas"
+		"pt"	"Contas com Game Bans são proibidas de se conectar ao servidor"
 	}
 	
 	"Kicked_Bans_Community"
 	{
-		"pt"	"Contas banidas pela comunidade são proibidas"
+		"pt"	"Contas com Ban Comunidade são proibidas de se conectar ao servidor"
 	}
 	
 	"Kicked_Bans_Recent"
 	{
-		"pt"	"Você foi banido do VAC ou do jogo recentemente. Como medida de segurança, você não pode entrar no servidor agora"
+		"pt"	"Você foi banido VAC/Game recentemente. Como medida de segurança, você não pode se conectar ao servidor"
 	}
 	
 	// ---------------------------------------
@@ -123,28 +123,28 @@
 	"SeemsUsingVPN"
 	{
 		// {1} = playername | {2} = IP
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} parece usar uma VPN com o IP {red}{2}"
+		"pt"	"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} parece usar uma VPN com o IP {red}{2}"
 	}
 	
 	"Discord_SeemsUsingVPN"
 	{
 		// {client} = playername+link | {1} = IP
-		"pt"		"Player {client} parece usar uma VPN com o IP {1}"
+		"pt"	"Player {client} parece usar uma VPN com o IP {1}"
 	}
 	
 	"Command_VPN_Title"
 	{
-		"pt"		"Players que potencialmente têm uma VPN"
+		"pt"	"Players que potencialmente têm uma VPN"
 	}
 	
 	"Command_VPN_Recheck"
 	{
-		"pt"		"Verifique novamente os IPs do player"
+		"pt"	"Verifique novamente os IPs dos players"
 	}
 	
 	"Command_VPN_NoVPN"
 	{
-		"pt"		"Nenhum player parece estar usando uma VPN"
+		"pt"	"Nenhum player parece estar usando uma VPN"
 	}
 	
 	// ---------------------------------------
@@ -153,18 +153,18 @@
 	
 	"Command_Prime_Title"
 	{
-		"pt"		"Players Non-Prime"
+		"pt"	"Players Non-Prime"
 	}
 	
 	"Command_Prime_NoNonPrime"
 	{
-		"pt"		"No player is Non-Prime"
+		"pt"	"No player is Non-Prime"
 	}
 	
 	"IsNonPrime"
 	{
 		// {1} = playername
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} não tem {red}Status Prime"
+		"pt"	"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} não tem {red}Status Prime"
 	}
 	
 	// -------------------------------------------
@@ -174,45 +174,45 @@
 	"IsCommunityBanned"
 	{
 		// {1} = playername
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} foi {red}banido pela comunidade"
+		"pt"	"{darkred}[NDA] {blue}Player {darkblue}{1}{blue} foi {red}banido pela comunidade"
 	}
 	
 	"Discord_IsCommunityBanned"
 	{
 		// {client} = playername+link
-		"pt"		"Player {client} foi banido pela comunidade"
+		"pt"	"Player {client} foi banido pela comunidade"
 	}
 	
 	"Command_Bans_Community_Title"
 	{
-		"pt"		"Players que são banidos pela comunidade"
+		"pt"	"Players que são banidos pela comunidade"
 	}
 	
 	"Command_Bans_Community_NoBan"
 	{
-		"pt"		"Nenhum player foi banido pela comunidade"
+		"pt"	"Nenhum player foi banido pela comunidade"
 	}
 	
 	"RecentlyBanned"
 	{
 		// {1} = playername | {2} = days ago
-		"pt"		"{darkred}[NDA] {blue}Player {darkblue}{1} {blue}foi {red}banido VAC/Game {2} dia(s) atrás"
+		"pt"	"{darkred}[NDA] {blue}Player {darkblue}{1} {blue}foi {red}banido VAC/Game {2} dia(s) atrás"
 	}
 	
 	"Discord_RecentlyBanned"
 	{
 		// {client} = playername+link | {1} = days ago
-		"pt"		"Player {client} foi banido VAC/Game {1} dia(s) atrás"
+		"pt"	"Player {client} foi banido VAC/Game {1} dia(s) atrás"
 	}
 	
 	"Command_Bans_Recent_Title"
 	{
-		"pt"		"Players que foram banidos recentemente"
+		"pt"	"Players que foram banidos recentemente"
 	}
 	
 	"Command_Bans_Recent_NoBan"
 	{
-		"pt"		"Nenhum player foi banido recentemente"
+		"pt"	"Nenhum player foi banido recentemente"
 	}
 	
 	// -----------------------------------------
@@ -222,24 +222,24 @@
 	"Time_HoursAndMins"
 	{
 		// {1} = playtime in hours | {2} = playtime in minutes
-		"pt"		"{1} horas e {2} minutos"
+		"pt"	"{1} horas e {2} minutos"
 	}
 	
 	"Time_Hours"
 	{
 		// {1} = playtime in hours
-		"pt"		"{1} horas"
+		"pt"	"{1} horas"
 	}
 	
 	"Time_Hour"
 	{
-		"pt"		"1 hora"
+		"pt"	"1 hora"
 	}
 	
 	"Time_Mins"
 	{
 		// {1} = playtime in minutes
-		"pt"		"{1} minutos"
+		"pt"	"{1} minutos"
 	}
 	
 	// -------------------------------------------
