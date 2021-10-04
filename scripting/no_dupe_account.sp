@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.4"
+#define PLUGIN_VERSION "1.4.5 Beta 1"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -16,10 +16,10 @@ int g_iGameBans[MAXPLAYERS + 1];
 int g_iLastBan[MAXPLAYERS + 1];
 
 int g_iClientDatabaseStatus[MAXPLAYERS + 1]; // 0 = awaiting check | 1 = checked | 2 = checked and should be updated | 3 = checked and doesn't exist
-int g_iClientDatabasePlaytime[MAXPLAYERS + 1] = -1;
-int g_iClientDatabaseSteamLevel[MAXPLAYERS + 1] = -1;
-int g_iClientDatabaseSteamAge[MAXPLAYERS + 1] = -1;
-int g_iClientDatabaseCSGOLevel[MAXPLAYERS + 1] = -1;
+int g_iClientDatabasePlaytime[MAXPLAYERS + 1] = {-1, ...};
+int g_iClientDatabaseSteamLevel[MAXPLAYERS + 1] = {-1, ...};
+int g_iClientDatabaseSteamAge[MAXPLAYERS + 1] = {-1, ...};
+int g_iClientDatabaseCSGOLevel[MAXPLAYERS + 1] = {-1, ...};
 int g_iClientDatabaseCSGOCoin[MAXPLAYERS + 1];
 int g_iClientLastCheck[MAXPLAYERS + 1];
 
