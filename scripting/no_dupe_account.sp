@@ -7,7 +7,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.5 Beta 1"
+#define PLUGIN_VERSION "1.4.5 Beta 2"
 
 int g_iChecks; // amount of checks
 int g_iClientChecksDone[MAXPLAYERS + 1];
@@ -48,7 +48,7 @@ char g_sRequestURLBuffer[512];
 char g_sSQLBuffer[3096]; // all queries will go into this buffer, to prevent high CPU usage due to the creation of this variable. Higher RAM consumption (but still negligible), lower CPU usage, that's the goal of global buffers.
 
 Handle g_hResourceTimer[MAXPLAYERS + 1];
-Handle g_hDB;
+Database g_hDB;
 
 // Cvars
 
@@ -228,7 +228,7 @@ public void OnConfigsExecuted()
 			cvarDatabase.IntValue = 0;
 		}
 		else
-			SQL_TConnect(OnSQLConnect, "no_dupe_account");
+			Database.Connect(OnSQLConnect, "no_dupe_account");
 	}
 }
 
@@ -1570,19 +1570,19 @@ void SendDiscordMessage(char[] title, char[] message, int client=0)
 	hook.Send();
 }
 
-public void OnSQLConnect(Handle owner, Handle hndl, char[] error, any data)
+public void OnSQLConnect(Database db, const char[] error, any data)
 {
-	if (!hndl)
+	if (!db)
 	{
 		LogError("ERROR: The database doesn't work: Database failure: %s", error);
 		cvarDatabase.IntValue = 0;
 	}
 	else
 	{
-		g_hDB = hndl;
+		g_hDB = db;
 		
 		/* NOT USED AS OF NOW
-		DBDriver driver = view_as<DBDriver>(SQL_ReadDriver(g_hDB));
+		DBDriver driver = g_hDB.Driver;
 		driver.GetIdentifier(g_sSQLBuffer, sizeof(g_sSQLBuffer)); // returns "mysql" or "sqlite"
 		if (StrEqual(g_sSQLBuffer, "mysql"))
 			g_bMySQL = true;
@@ -1607,17 +1607,17 @@ void UpdateDatabase()
 												... "steam_level INTEGER NOT NULL, "
 												... "steam_age INTEGER NOT NULL, "
 												... "last_check INTEGER NOT NULL)");
-	SQL_TQuery(g_hDB, OnDatabaseUpdated, g_sSQLBuffer);
+	g_hDB.Query(OnDatabaseUpdated, g_sSQLBuffer);
 	
 	/* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
 	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "PRAGMA table_info(players)");
-	SQL_TQuery(g_hDB, OnGetColumnsResponse, g_sSQLBuffer);
+	g_hDB.Query(OnGetColumnsResponse, g_sSQLBuffer);
 	*/
 }
 
-public void OnDatabaseUpdated(Handle owner, Handle hndl, char[] error, any data)
+void OnDatabaseUpdated(Database db, DBResultSet results, const char[] error, any data)
 {
-	if (!hndl)
+	if (!results)
 	{
 		LogError("'UpdateDatabase' Query failure: %s", error);
 		SetFailState("'UpdateDatabase' Query failure, check your logs");
@@ -1626,18 +1626,16 @@ public void OnDatabaseUpdated(Handle owner, Handle hndl, char[] error, any data)
 	if (cvarDatabaseExpire.BoolValue)
 	{
 		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "DELETE FROM players WHERE last_check < %i", GetTime() - (cvarDatabaseExpire.IntValue * 60 * 60 * 24));
-		SQL_TQuery(g_hDB, SQL_NullCallback, g_sSQLBuffer);
+		g_hDB.Query(SQL_NullCallback, g_sSQLBuffer);
 	}
 	
 	g_bDatabaseReady = true;
 }
 
-public void SQL_NullCallback(Handle owner, Handle hndl, char[] error, any data)
+void SQL_NullCallback(Database db, DBResultSet results, const char[] error, any data)
 {
-	if (!hndl)
-	{
+	if (!results)
 		LogError("Query failure: %s", error);
-	}
 }
 
 void CheckSQLPlayer(int client)
@@ -1646,10 +1644,10 @@ void CheckSQLPlayer(int client)
 	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
 	
 	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "SELECT last_check FROM players WHERE steamid = '%s'", steamid);
-	SQL_TQuery(g_hDB, OnCheckSQLPlayer, g_sSQLBuffer, GetClientUserId(client));
+	g_hDB.Query(OnCheckSQLPlayer, g_sSQLBuffer, GetClientUserId(client));
 }
 
-public void OnCheckSQLPlayer(Handle owner, Handle hndl, char [] error, any data)
+void OnCheckSQLPlayer(Database db, DBResultSet results, const char[] error, any data)
 {
 	int client = GetClientOfUserId(data);
 	
@@ -1658,20 +1656,20 @@ public void OnCheckSQLPlayer(Handle owner, Handle hndl, char [] error, any data)
 	if (!client)
 		return;
 	
-	if (!hndl)
+	if (!results)
 	{
 		LogError("'CheckSQLPlayer' Query failure: %s", error);
 		return;
 	}
 	
-	if (!SQL_GetRowCount(hndl) || !SQL_FetchRow(hndl)) 
+	if (!results.RowCount || !results.FetchRow())
 	{
 		g_iClientDatabaseStatus[client] = 3; // doesn't exist
 		OnClientPostAdminCheck(client);
 		return;
 	}
 	
-	g_iClientLastCheck[client] = SQL_FetchInt(hndl, 0);
+	g_iClientLastCheck[client] = results.FetchInt(0);
 	
 	char steamid[32];
 	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
@@ -1679,7 +1677,7 @@ public void OnCheckSQLPlayer(Handle owner, Handle hndl, char [] error, any data)
 	if (cvarDatabaseExpire.BoolValue && (g_iClientLastCheck[client] < (GetTime() - (cvarDatabaseExpire.IntValue * 60 * 60 * 24))))
 	{
 		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "DELETE FROM players WHERE steamid = '%s'", steamid);
-		SQL_TQuery(g_hDB, SQL_NullCallback, g_sSQLBuffer);
+		g_hDB.Query(SQL_NullCallback, g_sSQLBuffer);
 		g_iClientDatabaseStatus[client] = 3; // doesn't exist
 		OnClientPostAdminCheck(client);
 		return;
@@ -1692,10 +1690,10 @@ public void OnCheckSQLPlayer(Handle owner, Handle hndl, char [] error, any data)
 												... "steam_level, "
 												... "steam_age "
 												... "FROM players WHERE steamid = '%s'", steamid);
-	SQL_TQuery(g_hDB, OnCheckSQLPlayer2, g_sSQLBuffer, GetClientUserId(client));
+	g_hDB.Query(OnCheckSQLPlayer2, g_sSQLBuffer, GetClientUserId(client));
 }
 
-public void OnCheckSQLPlayer2(Handle owner, Handle hndl, char [] error, any data)
+void OnCheckSQLPlayer2(Database db, DBResultSet results, const char[] error, any data)
 {
 	int client = GetClientOfUserId(data);
 	
@@ -1704,20 +1702,20 @@ public void OnCheckSQLPlayer2(Handle owner, Handle hndl, char [] error, any data
 	if (!client)
 		return;
 	
-	if (!hndl)
+	if (!results)
 	{
 		LogError("'CheckSQLPlayer2' Query failure: %s", error);
 		return;
 	}
 	
-	SQL_FetchRow(hndl); // row should always exist
+	results.FetchRow(); // row should always exist
 	
-	g_iClientDatabaseCSGOLevel[client] = SQL_FetchInt(hndl, 0);
-	g_iClientDatabaseCSGOCoin[client] = SQL_FetchInt(hndl, 1);
-	g_bPrime[client] = !!SQL_FetchInt(hndl, 2); // !!int converts it to bool
-	g_iClientDatabasePlaytime[client] = SQL_FetchInt(hndl, 3);
-	g_iClientDatabaseSteamLevel[client] = SQL_FetchInt(hndl, 4);
-	g_iClientDatabaseSteamAge[client] = SQL_FetchInt(hndl, 5);
+	g_iClientDatabaseCSGOLevel[client] = results.FetchInt(0);
+	g_iClientDatabaseCSGOCoin[client] = results.FetchInt(1);
+	g_bPrime[client] = !!results.FetchInt(2); // !!int converts it to bool
+	g_iClientDatabasePlaytime[client] = results.FetchInt(3);
+	g_iClientDatabaseSteamLevel[client] = results.FetchInt(4);
+	g_iClientDatabaseSteamAge[client] = results.FetchInt(5);
 	
 	if (cvarDatabaseRefresh.BoolValue && (g_iClientLastCheck[client] < (GetTime() - (cvarDatabaseRefresh.IntValue * 60))))
 		g_iClientDatabaseStatus[client] = 2;
@@ -1750,7 +1748,7 @@ void InsertUpdatePlayer(int client, int csgo_level, int csgo_coin, bool prime, i
 												... "'%i', "
 												... "'%i', "
 												... "'%i')", steamid, csgo_level, csgo_coin, prime, csgo_playtime, steam_level, steam_age, (g_iClientDatabaseStatus[client] == 1) ? g_iClientLastCheck[client] : GetTime()); // Keep old last_check, else update it. Only update it if status != 1
-	SQL_TQuery(g_hDB, SQL_NullCallback, g_sSQLBuffer);
+	g_hDB.Query(SQL_NullCallback, g_sSQLBuffer);
 }
 
 /* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
@@ -1768,10 +1766,10 @@ stock void ColumnExists(char[] column)
 		// table exists?: Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='%s')", table);
 		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "PRAGMA table_info('%s')", column);
 	}
-	SQL_TQuery(g_hDB, OnTableExistsResponse, g_sSQLBuffer, table);
+	g_hDB.Query(OnTableExistsResponse, g_sSQLBuffer, table);
 }
 
-public void OnGetColumnsResponse(Handle owner, Handle hndl, char[] error, any data)
+public void OnGetColumnsResponse(Database db, DBResultSet results, const char[] error, any data)
 {
 	if (!hndl)
 	{
@@ -1786,9 +1784,9 @@ public void OnGetColumnsResponse(Handle owner, Handle hndl, char[] error, any da
 	else
 	{
 		char tableName[32];
-		while (SQL_FetchRow(g_hDB))
+		while (results.FetchRow())
 		{
-			SQL_FetchString(g_hDB, 1, tableName, sizeof(tableName));
+			results.FetchString(1, tableName, sizeof(tableName));
 			if (StrEqual())
 		}
 	}	
