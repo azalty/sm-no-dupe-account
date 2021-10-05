@@ -1,5 +1,6 @@
 #include <sourcemod>
 #include <sdktools>
+#include <geoip>
 #include <autoexecconfig>
 #include <colorvariables>
 #undef REQUIRE_PLUGIN
@@ -7,9 +8,12 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.4.5 Beta 2"
+#define PLUGIN_VERSION "1.5.0 Beta 1"
+
+#define AMOUNT_METHODS 14 // total amount of methods in the config file
 
 int g_iChecks; // amount of checks
+int g_iClientChecks[MAXPLAYERS + 1];
 int g_iClientChecksDone[MAXPLAYERS + 1];
 int g_iVACBans[MAXPLAYERS + 1];
 int g_iGameBans[MAXPLAYERS + 1];
@@ -46,9 +50,11 @@ char g_sSteamAge[16];
 char g_sHostname[128];
 char g_sRequestURLBuffer[512];
 char g_sSQLBuffer[3096]; // all queries will go into this buffer, to prevent high CPU usage due to the creation of this variable. Higher RAM consumption (but still negligible), lower CPU usage, that's the goal of global buffers.
+char g_sMethods[AMOUNT_METHODS][32];
 
 Handle g_hResourceTimer[MAXPLAYERS + 1];
 Database g_hDB;
+KeyValues g_hConfig;
 
 // Cvars
 
@@ -124,8 +130,14 @@ public void OnPluginStart()
 	// Translations
 	LoadTranslations("no_dupe_account.phrases");
 	
-	// Cmds
+	// Config
+	char kvPath[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, kvPath, sizeof(kvPath), "configs/no_dupe_account.cfg"); // Get cfg file
+	g_hConfig = new KeyValues("no_dupe_account");
+	if (!g_hConfig.ImportFromFile(kvPath))
+		SetFailState("Unable to import configs/no_dupe_account.cfg - make sure this config file exists!");
 	
+	// Cmds
 	RegAdminCmd("sm_checkmepls", Command_CheckMePls, ADMFLAG_ROOT, "Runs every check on you again and apply punishment if needed");
 	//RegAdminCmd("sm_vpn", Command_VPN, ADMFLAG_BAN, "Opens a menu to see if someone is potentially using a VPN");
 	RegAdminCmd("sm_nda", Command_NDA, ADMFLAG_BAN, "Opens the NDA menu with useful infos");
@@ -271,7 +283,7 @@ public void OnLibraryRemoved(const char[] name)
 	}
 }
 
-public void OnSteamAPIKeyChange(ConVar convar, char[] oldValue, char[] newValue)
+void OnSteamAPIKeyChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sSteamAPIKey, sizeof(g_sSteamAPIKey), newValue);
 	if (StrEqual(g_sSteamAPIKey, ""))
@@ -284,7 +296,7 @@ public void OnSteamAPIKeyChange(ConVar convar, char[] oldValue, char[] newValue)
 	}
 }
 
-public void OnDiscordChange(ConVar convar, char[] oldValue, char[] newValue)
+void OnDiscordChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sDiscordWebhook, sizeof(g_sDiscordWebhook), newValue);
 	if (StrEqual(g_sDiscordWebhook, ""))
@@ -297,7 +309,7 @@ public void OnDiscordChange(ConVar convar, char[] oldValue, char[] newValue)
 	}
 }
 
-public void OnSteamAgeChange(ConVar convar, char[] oldValue, char[] newValue)
+void OnSteamAgeChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sSteamAge, sizeof(g_sSteamAge), newValue);
 	if (StrEqual(g_sSteamAge, "0"))
@@ -310,12 +322,12 @@ public void OnSteamAgeChange(ConVar convar, char[] oldValue, char[] newValue)
 	}
 }
 
-public void OnHostnameChange(ConVar convar, char[] oldValue, char[] newValue)
+void OnHostnameChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sHostname, sizeof(g_sHostname), newValue);
 }
 
-public Action Command_NDA(int client, int args)
+Action Command_NDA(int client, int args)
 {
 	Menu menu = new Menu(NDAMenu);
 	menu.SetTitle("No Dupe Account");
@@ -362,7 +374,7 @@ public Action Command_NDA(int client, int args)
 	return Plugin_Handled;
 }
 
-public int NDAMenu(Menu menu, MenuAction action, int client, int itemNum)
+int NDAMenu(Menu menu, MenuAction action, int client, int itemNum)
 {
 	switch (action)
 	{
@@ -426,7 +438,7 @@ void InitVPNMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
+int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 {
 	switch (action)
 	{
@@ -511,7 +523,7 @@ void InitPrimeMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int PrimeMenu(Menu menu, MenuAction action, int client, int itemNum)
+int PrimeMenu(Menu menu, MenuAction action, int client, int itemNum)
 {
 	switch (action)
 	{
@@ -574,7 +586,7 @@ void InitCommunityBansMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int CommunityBansMenu(Menu menu, MenuAction action, int client, int itemNum)
+int CommunityBansMenu(Menu menu, MenuAction action, int client, int itemNum)
 {
 	switch (action)
 	{
@@ -643,7 +655,7 @@ void InitRecentBansMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RecentBansMenu(Menu menu, MenuAction action, int client, int itemNum)
+int RecentBansMenu(Menu menu, MenuAction action, int client, int itemNum)
 {
 	switch (action)
 	{
@@ -702,7 +714,7 @@ void ResetClientVars(int client)
 	g_iClientLastCheck[client] = 0;
 }
 
-public Action Command_CheckMePls(int client, int args)
+Action Command_CheckMePls(int client, int args)
 {
 	if (client)
 	{
@@ -721,19 +733,196 @@ public void OnClientDisconnect(int client)
 	ResetClientVars(client);
 }
 
+/*
+Returns wether or not a client is whitelisted from a specific method.
+This function can be pretty intensive. The more methods and identifiers we will have, the worse it will get.
+This function might be changed in the future for something more optimized.
+---
+int client		Client index.
+char method		Method string. Must be exact to the one entered in configs/no_dupe_account.cfg
+return true		This client is whitelisted from this method.
+return false	This client isn't whitelisted from this method.
+*/
+bool IsClientWhitelisted(int client, char[] method)
+{
+	char buffer[32];
+	
+	// Check SteamID
+	GetClientAuthId(client, AuthId_Steam2, buffer, sizeof(buffer));
+	if (IsIdentifierWhitelisted(buffer, method))
+		return true;
+	
+	// Check IP
+	GetClientIP(client, buffer, sizeof(buffer));
+	if (IsIdentifierWhitelisted(buffer, method))
+		return true;
+	
+	// Check country code
+	char ccode[4]; // $XX and null terminator
+	if (!GeoipCode2(buffer, ccode))
+		strcopy(ccode, sizeof(ccode), "XX"); // no country found for this IP
+	Format(ccode, sizeof(ccode), "$%s", ccode);
+	if (IsIdentifierWhitelisted(ccode, method))
+		return true;
+	
+	// Check flags
+	int flagBits = GetUserFlagBits(client);
+	int tempBit;
+	
+	//LogMessage("Checking flags for %L", client);
+	g_hConfig.Rewind();
+	g_hConfig.JumpToKey("Players");
+	g_hConfig.GotoFirstSubKey(false); // set section name as the next key
+	do
+	{
+		g_hConfig.GetSectionName(buffer, sizeof(buffer)); // retrive the key name (instead of the section name)
+		// Warning! The section name is case insensitive, so 'c' could return 'C'.
+		
+		// Since we are traversing a key (not a section), the key is mentionned with NULL_STRING instead of buffer.
+		if (g_hConfig.GetDataType(NULL_STRING) == KvData_None) // there is no key
+		{
+			//LogMessage("Key is empty");
+			break;
+		}
+		
+		//LogMessage("Key found: %s", buffer);
+		// Check that this is indeed a flag.
+		if (!IsCharAlpha(buffer[0]) || StrContains(buffer, "STEAM_1", false) != -1)
+			continue;
+		
+		//LogMessage("Key '%s' is a flag key! Checking if we have access..", buffer);
+		tempBit = ReadFlagString(buffer);
+		if ((flagBits & tempBit != tempBit) && (flagBits & ADMFLAG_ROOT != ADMFLAG_ROOT)) // Player doesn't have the required flags. Root ('z' flag) players will always have access.
+			continue;
+		
+		//LogMessage("We have access to the '%s' key!", buffer);
+		g_hConfig.GetString(NULL_STRING, buffer, sizeof(buffer));
+		//LogMessage("value of this key: '%s'", buffer);
+		if (IsMethodInMethodList(method, buffer))
+		{
+			//LogMessage("method %s in methodlist %s, aborting...", method, buffer);
+			return true;
+		}
+		//LogMessage("method %s not in methodlist %s", method, buffer);
+	}
+	while (g_hConfig.GotoNextKey(false));
+	
+	return false;
+}
+
+bool IsIdentifierWhitelisted(char[] identifier, char[] method)
+{
+	g_hConfig.Rewind();
+	g_hConfig.JumpToKey("Players");
+	char buffer[100];
+	g_hConfig.GetString(identifier, buffer, sizeof(buffer));
+	if (buffer[0] == '\0')
+		return false;
+	
+	if (!IsMethodInMethodList(method, buffer))
+		return false;
+	return true;
+}
+
+bool IsMethodInMethodList(char[] method, char[] methodList)
+{
+	// Verify that the method is indeed inside. In case a method is a part of another.
+	// This is not really optimized, but avoids compatibility problems that might come in the future.
+	
+	// We use g_sMethods to prevent creating too much variables.
+	int iMethods = ExplodeString(methodList, ";", g_sMethods, sizeof(g_sMethods), sizeof(g_sMethods[]));
+	for (int i; i < iMethods; i++)
+	{
+		if (StrEqual(g_sMethods[i], method, false) || StrEqual(g_sMethods[i], "all", false))
+			return true;
+	}
+	return false;
+}
+
+void CheckCountry(int client)
+{
+	if (IsClientWhitelisted(client, "country"))
+		return;
+	
+	char buffer[200];
+	GetClientIP(client, buffer, sizeof(buffer));
+	
+	// Check country code
+	char ccode[3];
+	if (!GeoipCode2(buffer, ccode))
+		strcopy(ccode, sizeof(ccode), "XX"); // no country found for this IP
+	
+	g_hConfig.Rewind();
+	g_hConfig.JumpToKey("Countries");
+	bool whitelist = !!g_hConfig.GetNum("whitelist"); // !! = int to bool
+	
+	if (whitelist)
+	{
+		if (g_hConfig.JumpToKey(ccode))
+			return;
+	}
+	else
+	{
+		if (!g_hConfig.JumpToKey(ccode))
+			return;
+	}
+	char sTime[16];
+	g_hConfig.GetString("time", sTime, sizeof(sTime), "-1");
+	int time = StringToInt(sTime);
+	
+	g_hConfig.GetString("reason", buffer, sizeof(buffer), "NDA: Your country is not allowed to join this server");
+	
+	char command[300];
+	if (time == -1)
+	{
+		g_hConfig.GetString("command", command, sizeof(command), "sm_kick {userid} {reason}");
+		if (StrEqual(command, "sm_kick {userid} {reason}")) // if no command specified (default one), use KickClient()
+		{
+			KickClient(client, buffer);
+			if (cvarLog.BoolValue)
+				LogMessage("Kicked %L (Blacklisted country)", client);
+			return;
+		}
+	}
+	else
+	{
+		g_hConfig.GetString("command", command, sizeof(command), "sm_ban {userid} {time} {reason}");
+		// Replace with time
+		ReplaceString(command, sizeof(command), "{time}", sTime);
+	}
+	// Replace with reason
+	Format(buffer, sizeof(buffer), "\"%s\"", buffer);
+	ReplaceString(command, sizeof(command), "{reason}", buffer);
+	
+	// Replace with userid
+	Format(buffer, sizeof(buffer), "#%i", GetClientUserId(client));
+	ReplaceString(command, sizeof(command), "{userid}", buffer);
+	
+	// Replace with SteamID
+	GetClientAuthId(client, AuthId_Steam2, buffer, sizeof(buffer));
+	Format(buffer, sizeof(buffer), "\"%s\"", buffer);
+	ReplaceString(command, sizeof(command), "{steamid}", buffer);
+	
+	if (cvarLog.BoolValue)
+		LogMessage("Refused %L (Blacklisted country)", client);
+	ServerCommand(command);
+}
+
 //public void OnClientAuthorized(int client)
 public void OnClientPostAdminCheck(int client)
 {
 	if (IsFakeClient(client)) // exclude bots
-	{
 		return;
-	}
 	
 	if (cvarDatabase.BoolValue && !g_iClientDatabaseStatus[client] && g_bDatabaseReady)
 	{
 		CheckSQLPlayer(client);
 		return;
 	}
+	
+	g_iClientChecks[client] = g_iChecks; // dynamic check count for each player. Meant for method whitelist.
+	
+	CheckCountry(client);
 	
 	// sources:
 	// https://forums.alliedmods.net/showthread.php?t=314780
@@ -743,25 +932,41 @@ public void OnClientPostAdminCheck(int client)
 	{
 		if (cvarVPN.BoolValue)
 		{
-			char ip[20];
-			GetClientIP(client, ip, sizeof(ip));
-			
-			CheckIP(client, ip);
+			if (!IsClientWhitelisted(client, "vpn"))
+			{
+				char ip[20];
+				GetClientIP(client, ip, sizeof(ip));
+				
+				CheckIP(client, ip);
+			}
+			else if (cvarVPN.IntValue == 2)
+			{
+				g_iClientChecks[client]--;
+				ProcessChecks(client);
+			}
 		}
 		
 		if (cvarPrime.IntValue == 1)
 		{
-			g_iClientChecksDone[client]++;
-			// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
-			if (g_bPrime[client] || (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense)) // if player is paid prime
+			if (IsClientWhitelisted(client, "prime"))
 			{
-				if (!g_bClientPassedCheck[client])
-					PassedCheck(client, "Is Prime");
-				g_bClientPassedCheck[client] = true;
-				g_bPrime[client] = true; // this will set Prime again if got through DB, but we don't care
+				g_iClientChecks[client]--;
+				ProcessChecks(client);
 			}
 			else
-				ProcessChecks(client);
+			{
+				g_iClientChecksDone[client]++;
+				// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
+				if (g_bPrime[client] || (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense)) // if player is paid prime
+				{
+					if (!g_bClientPassedCheck[client])
+						PassedCheck(client, "Is Prime");
+					g_bClientPassedCheck[client] = true;
+					g_bPrime[client] = true; // this will set Prime again if got through DB, but we don't care
+				}
+				else
+					ProcessChecks(client);
+			}
 		}
 		else if ((cvarPrime.IntValue == 2) && !g_bPrime[client] && (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense))
 			g_bPrime[client] = true;
@@ -770,26 +975,50 @@ public void OnClientPostAdminCheck(int client)
 		{
 			if (cvarPlaytime.BoolValue)
 			{
-				if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabasePlaytime[client] != -1))
-					VerifPlaytime(client, g_iClientDatabasePlaytime[client], true);
-				else
-					CheckPlaytime(client);
+				if (!IsClientWhitelisted(client, "csgo_playtime"))
+				{
+					if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabasePlaytime[client] != -1))
+						VerifPlaytime(client, g_iClientDatabasePlaytime[client], true);
+					else
+						CheckPlaytime(client);
+				}
+				else if (cvarPlaytime.IntValue > 0)
+				{
+					g_iClientChecks[client]--;
+					ProcessChecks(client);
+				}
 			}
 			
 			if (cvarSteamLevel.BoolValue)
 			{
-				if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabaseSteamLevel[client] != -1))
-					VerifSteamLevel(client, g_iClientDatabaseSteamLevel[client], true);
-				else
-					CheckSteamLevel(client);
+				if (!IsClientWhitelisted(client, "steam_level"))
+				{
+					if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabaseSteamLevel[client] != -1))
+						VerifSteamLevel(client, g_iClientDatabaseSteamLevel[client], true);
+					else
+						CheckSteamLevel(client);
+				}
+				else if (cvarPlaytime.IntValue > 0)
+				{
+					g_iClientChecks[client]--;
+					ProcessChecks(client);
+				}
 			}
 			
 			if (g_bSteamAgeEnabled)
 			{
-				if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabaseSteamAge[client] != -1))
-					VerifSteamAge(client, g_iClientDatabaseSteamAge[client], true);
-				else
-					CheckSteamAge(client);
+				if (!IsClientWhitelisted(client, "steam_age"))
+				{
+					if ((g_iClientDatabaseStatus[client] == 1) && (g_iClientDatabaseSteamAge[client] != -1))
+						VerifSteamAge(client, g_iClientDatabaseSteamAge[client], true);
+					else
+						CheckSteamAge(client);
+				}
+				else if ((StrContains(g_sSteamAge, "~") == -1) && cvarSteamAge.IntValue > 0)
+				{
+					g_iClientChecks[client]--;
+					ProcessChecks(client);
+				}
 			}
 			
 			if (cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue)
@@ -807,7 +1036,7 @@ public void OnClientPostAdminCheck(int client)
 	}
 }
 
-public Action Timer_GetResource(Handle timer, int client)
+Action Timer_GetResource(Handle timer, int client)
 {
 	int resourceEnt = GetPlayerResourceEntity();
 	int level = GetEntProp(resourceEnt, Prop_Send, "m_nPersonaDataPublicLevel", _, client);
@@ -820,47 +1049,61 @@ public Action Timer_GetResource(Handle timer, int client)
 	
 	if (cvarLevel.BoolValue)
 	{
-		if (level > g_iClientDatabaseCSGOLevel[client])
-			g_iClientDatabaseCSGOLevel[client] = level;
-		
-		g_iClientChecksDone[client]++;
-		if (g_iClientDatabaseCSGOLevel[client] >= cvarLevel.IntValue)
+		if (IsClientWhitelisted(client, "csgo_level"))
 		{
-			if (!g_bClientPassedCheck[client])
-				PassedCheck(client, "Enough CS:GO Level");
-			g_bClientPassedCheck[client] = true;
+			g_iClientChecks[client]--;
+			ProcessChecks(client);
 		}
 		else
 		{
-			ProcessChecks(client);
+			if (level > g_iClientDatabaseCSGOLevel[client])
+				g_iClientDatabaseCSGOLevel[client] = level;
+			
+			g_iClientChecksDone[client]++;
+			if (g_iClientDatabaseCSGOLevel[client] >= cvarLevel.IntValue)
+			{
+				if (!g_bClientPassedCheck[client])
+					PassedCheck(client, "Enough CS:GO Level");
+				g_bClientPassedCheck[client] = true;
+			}
+			else
+				ProcessChecks(client);
 		}
 	}
 	
 	if (cvarCoin.BoolValue)
 	{
-		int activeCoin = GetEntProp(resourceEnt, Prop_Send, "m_nActiveCoinRank", _, client);
-		if (activeCoin)
-			g_iClientDatabaseCSGOCoin[client] = activeCoin;
-		if (g_iClientDatabaseCSGOCoin[client] > 0) // Coin could previously be set to -1
+		if (IsClientWhitelisted(client, "csgo_coin"))
 		{
-			if (cvarCoin.IntValue == 1)
-			{
-				if (!g_bClientPassedCheck[client])
-					PassedCheck(client, "Has a Coin on his cs:go profile");
-				g_iClientChecksDone[client]++;
-				g_bClientPassedCheck[client] = true;
-			}
+			g_iClientChecks[client]--;
+			ProcessChecks(client);
 		}
 		else
 		{
-			if (cvarCoin.IntValue == 1)
+			int activeCoin = GetEntProp(resourceEnt, Prop_Send, "m_nActiveCoinRank", _, client);
+			if (activeCoin)
+				g_iClientDatabaseCSGOCoin[client] = activeCoin;
+			if (g_iClientDatabaseCSGOCoin[client] > 0) // Coin could previously be set to -1
 			{
-				g_iClientChecksDone[client]++;
-				ProcessChecks(client);
+				if (cvarCoin.IntValue == 1)
+				{
+					if (!g_bClientPassedCheck[client])
+						PassedCheck(client, "Has a Coin on his cs:go profile");
+					g_iClientChecksDone[client]++;
+					g_bClientPassedCheck[client] = true;
+				}
 			}
 			else
 			{
-				KickClient(client, "%t", "Kicked_NoCoin");
+				if (cvarCoin.IntValue == 1)
+				{
+					g_iClientChecksDone[client]++;
+					ProcessChecks(client);
+				}
+				else
+				{
+					KickClient(client, "%t", "Kicked_NoCoin");
+				}
 			}
 		}
 	}
@@ -880,7 +1123,7 @@ void CheckIP(int client, char[] ip, bool dontNotify = false)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid, bool dontNotify)
+void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid, bool dontNotify)
 {
 	int client = GetClientOfUserId(userid);
 	
@@ -964,11 +1207,16 @@ public void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 
 void ProcessChecks(int client)
 {
-	if (!g_iChecks || g_bClientPassedCheck[client])
+	if (g_bClientPassedCheck[client])
+		return;
+	if (!g_iClientChecks[client])
 	{
+		if (cvarLog.BoolValue)
+			LogMessage("Approved %L (Fully whitelisted, has no checks to pass)", client);
 		return;
 	}
-	if (g_iClientChecksDone[client] == g_iChecks)
+	
+	if (g_iClientChecksDone[client] == g_iClientChecks[client])
 	{
 		if (g_bClientPrivatePlaytime[client])
 		{
@@ -1010,7 +1258,7 @@ void CheckPlaytime(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	
@@ -1158,7 +1406,7 @@ void CheckSteamLevel(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	
@@ -1299,7 +1547,7 @@ void RetrieveSteamAgeMode(int& iMode, int& iRequiredAge)
 	}
 }
 
-public void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	
@@ -1422,7 +1670,7 @@ void CheckSteamBans(int client)
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-public void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
 {
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
@@ -1456,21 +1704,21 @@ public void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bReque
 	g_iLastBan[client] = StringToInt(sArray[4][19]) // get everything after ':', aka the integer, days since last ban
 	g_iGameBans[client] = StringToInt(sArray[5][19]) // get everything after ':', aka the integer
 	
-	if (cvarBansVAC.BoolValue && (g_iVACBans[client] >= cvarBansVAC.IntValue))
+	if (cvarBansVAC.BoolValue && (g_iVACBans[client] >= cvarBansVAC.IntValue) && !IsClientWhitelisted(client, "bans_vac"))
 	{
 		if (g_iVACBans[client] == 1)
 			KickClient(client, "%t", "Kicked_Bans_VAC");
 		else
 			KickClient(client, "%t", "Kicked_Bans_VAC_multiple");
 	}
-	else if (cvarBansGame.BoolValue && (g_iGameBans[client] >= cvarBansGame.IntValue))
+	else if (cvarBansGame.BoolValue && (g_iGameBans[client] >= cvarBansGame.IntValue) && !IsClientWhitelisted(client, "bans_game"))
 	{
 		if (g_iGameBans[client] == 1)
 			KickClient(client, "%t", "Kicked_Bans_Game");
 		else
 			KickClient(client, "%t", "Kicked_Bans_Game_multiple");
 	}
-	else if (g_bCommunityBanned[client] && cvarBansCommunity.BoolValue)
+	else if (g_bCommunityBanned[client] && cvarBansCommunity.BoolValue && !IsClientWhitelisted(client, "bans_community"))
 	{
 		if (cvarBansCommunity.IntValue == 1)
 		{
@@ -1495,13 +1743,13 @@ public void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bReque
 			}
 		}
 	}
-	else if (cvarBansTotal.BoolValue && ((g_iVACBans[client] + g_iGameBans[client]) >= cvarBansTotal.IntValue))
+	else if (cvarBansTotal.BoolValue && ((g_iVACBans[client] + g_iGameBans[client]) >= cvarBansTotal.IntValue) && !IsClientWhitelisted(client, "bans_total"))
 	{
 		KickClient(client, "%t", "Kicked_Bans_Total");
 	}
 	else // having else if here is not a problem in itself for now, but it might be in the future due to how the BansRecent method is done
 	{
-		if (cvarBansRecent.BoolValue)
+		if (cvarBansRecent.BoolValue && !IsClientWhitelisted(client, "bans_recent"))
 		{
 			if ((cvarBansRecent.IntValue < 0) && ((g_iVACBans[client] + g_iGameBans[client]) > 0) && (g_iLastBan[client] <= -cvarBansRecent.IntValue))
 			{
@@ -1570,7 +1818,7 @@ void SendDiscordMessage(char[] title, char[] message, int client=0)
 	hook.Send();
 }
 
-public void OnSQLConnect(Database db, const char[] error, any data)
+void OnSQLConnect(Database db, const char[] error, any data)
 {
 	if (!db)
 	{
@@ -1769,7 +2017,7 @@ stock void ColumnExists(char[] column)
 	g_hDB.Query(OnTableExistsResponse, g_sSQLBuffer, table);
 }
 
-public void OnGetColumnsResponse(Database db, DBResultSet results, const char[] error, any data)
+void OnGetColumnsResponse(Database db, DBResultSet results, const char[] error, any data)
 {
 	if (!hndl)
 	{
