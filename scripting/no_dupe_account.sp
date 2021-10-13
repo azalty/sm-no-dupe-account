@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.0 Beta 1"
+#define PLUGIN_VERSION "1.5.0 Beta 2"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -112,7 +112,7 @@ public void OnPluginStart()
 	cvarBansCommunity = AutoExecConfig_CreateConVar("nda_bans_community", "2", "(Requires SteamAPI Key)\n0 = disabled\n1 = kick player if he is community banned (spam, phishing, nudity...)\nThese people will have private profiles and are unable to add friends or comment.\n2 = send an in-game alert to admins if player is community banned (and a discord message if setup)");
 	cvarBansTotal = AutoExecConfig_CreateConVar("nda_bans_total", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been banned at least X times (VAC+Game bans)");
 	cvarBansRecent = AutoExecConfig_CreateConVar("nda_bans_recent", "5", "(Requires SteamAPI Key)\n0 = disabled\nany positive integer = send an in-game alert to admins (and a discord message if setup) if player has been VAC or Game banned X days ago or less\nany negative integer = same as positive integer, but instead of sending an alert, it will kick the player");
-	cvarLog = AutoExecConfig_CreateConVar("nda_log", "1", "0 = don't log\n1 = log check approvals & refusals to server's console\n2 = log check refusals to server's console");
+	cvarLog = AutoExecConfig_CreateConVar("nda_log", "1", "0 = don't log\n1 = log check approvals & refusals to server's console\n2 = log check refusals to server's console\n3 = log approvals, refusals and developer infos (useful for debugging or manual profiling of players)");
 	
 	AutoExecConfig_ExecuteFile();
 	AutoExecConfig_CleanFile();
@@ -150,58 +150,36 @@ public void OnConfigsExecuted()
 	cvarDiscord.GetString(g_sDiscordWebhook, sizeof(g_sDiscordWebhook));
 	cvarSteamAge.GetString(g_sSteamAge, sizeof(g_sSteamAge));
 	if (StrEqual(g_sSteamAPIKey, "")) // if none
-	{
 		g_bSteamAPIKeyAvailable = false;
-	}
 	else
-	{
 		g_bSteamAPIKeyAvailable = true;
-	}
 	if (StrEqual(g_sDiscordWebhook, "")) // if none
-	{
 		g_bDiscordAvailable = false;
-	}
 	else
-	{
 		g_bDiscordAvailable = true;
-	}
 	
 	if (cvarVPN.IntValue == 2)
-	{
 		g_iChecks++;
-	}
 	if (cvarLevel.BoolValue)
-	{
 		g_iChecks++;
-	}
 	if (cvarPrime.IntValue == 1)
-	{
 		g_iChecks++;
-	}
 	if (cvarPlaytime.BoolValue)
 	{
 		if (g_bSteamAPIKeyAvailable)
 		{
 			if (cvarPlaytime.IntValue > 0)
-			{
 				g_iChecks++;
-			}
 		}
 		else
-		{
 			LogMessage("WARNING: No SteamAPI Key is configured, but Playtime method is enabled! Playtime requests will NOT work.");
-		}
 	}
 	if (cvarSteamLevel.IntValue > 0)
 	{
 		if (g_bSteamAPIKeyAvailable)
-		{
 			g_iChecks++;
-		}
 		else
-		{
 			LogMessage("WARNING: No SteamAPI Key is configured, but Steam Level method is enabled! Steam Level requests will NOT work.");
-		}
 	}
 	if (!StrEqual(g_sSteamAge, "0"))
 	{
@@ -209,27 +187,17 @@ public void OnConfigsExecuted()
 		if (g_bSteamAPIKeyAvailable)
 		{
 			if ((StrContains(g_sSteamAge, "~") == -1) && cvarSteamAge.IntValue > 0)
-			{
 				g_iChecks++;
-			}
 		}
 		else
-		{
 			LogMessage("WARNING: No SteamAPI Key is configured, but Steam Age method is enabled! Steam Age requests will NOT work.");
-		}
 	}
 	else
-	{
 		g_bSteamAgeEnabled = false;
-	}
 	if (cvarCoin.IntValue == 1)
-	{
 		g_iChecks++;
-	}
 	if (!g_bSteamAPIKeyAvailable && (cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue))
-	{
 		LogMessage("WARNING: No SteamAPI Key is configured, but Steam Bans method is enabled! Steam Bans requests will NOT work.");
-	}
 	
 	// Database
 	if (cvarDatabase.BoolValue && !g_bDatabaseReady)
@@ -250,76 +218,52 @@ public void OnAllPluginsLoaded()
 	g_bDiscordExists = LibraryExists("discord-api");
 	
 	if (!g_bSteamworksExists && (cvarVPN.BoolValue || cvarPrime.BoolValue || cvarPlaytime.BoolValue || cvarSteamLevel.BoolValue || g_bDiscordAvailable || g_bSteamAgeEnabled || cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue))
-	{
 		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime, Playtime, Steam Level and Steam Bans modules will NOT work.");
-	}
 	if (!g_bDiscordExists && g_bDiscordAvailable)
-	{
 		LogMessage("WARNING: Your current config requires the Discord API extension, and it is not installed. Discord notifications will NOT work.");
-	}
 }
 
 public void OnLibraryAdded(const char[] name)
 {
 	if (StrEqual(name, "SteamWorks"))
-	{
 		g_bSteamworksExists = true;
-	}
 	else if (StrEqual(name, "discord-api"))
-	{
 		g_bDiscordExists = true;
-	}
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
 	if (StrEqual(name, "SteamWorks"))
-	{
 		g_bSteamworksExists = false;
-	}
 	else if (StrEqual(name, "discord-api"))
-	{
 		g_bDiscordExists = false;
-	}
 }
 
 void OnSteamAPIKeyChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sSteamAPIKey, sizeof(g_sSteamAPIKey), newValue);
 	if (StrEqual(g_sSteamAPIKey, ""))
-	{
 		g_bSteamAPIKeyAvailable = false;
-	}
 	else
-	{
 		g_bSteamAPIKeyAvailable = true;
-	}
 }
 
 void OnDiscordChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sDiscordWebhook, sizeof(g_sDiscordWebhook), newValue);
 	if (StrEqual(g_sDiscordWebhook, ""))
-	{
 		g_bDiscordAvailable = false;
-	}
 	else
-	{
 		g_bDiscordAvailable = true;
-	}
 }
 
 void OnSteamAgeChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sSteamAge, sizeof(g_sSteamAge), newValue);
 	if (StrEqual(g_sSteamAge, "0"))
-	{
 		g_bSteamAgeEnabled = false;
-	}
 	else
-	{
 		g_bSteamAgeEnabled = true;
-	}
 }
 
 void OnHostnameChange(ConVar convar, char[] oldValue, char[] newValue)
@@ -384,26 +328,16 @@ int NDAMenu(Menu menu, MenuAction action, int client, int itemNum)
 			GetMenuItem(menu, itemNum, info, sizeof(info));
 			
 			if (StrEqual(info, "vpn"))
-			{
 				InitVPNMenu(client);
-			}
 			else if (StrEqual(info, "prime"))
-			{
 				InitPrimeMenu(client);
-			}
 			else if (StrEqual(info, "communitybans"))
-			{
 				InitCommunityBansMenu(client);
-			}
 			else
-			{
 				InitRecentBansMenu(client);
-			}
 		}
 		case MenuAction_End:
-		{
 			delete menu;
-		}
 	}
 }
 
@@ -483,14 +417,10 @@ int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 		case MenuAction_Cancel: 
 		{
 			if (itemNum == MenuCancel_ExitBack)
-			{
 				Command_NDA(client, 0);
-			}
 		}
 		case MenuAction_End:
-		{
 			delete menu;
-		}
 	}
 	return 0;
 }
@@ -546,14 +476,10 @@ int PrimeMenu(Menu menu, MenuAction action, int client, int itemNum)
 		case MenuAction_Cancel: 
 		{
 			if (itemNum == MenuCancel_ExitBack)
-			{
 				Command_NDA(client, 0);
-			}
 		}
 		case MenuAction_End:
-		{
 			delete menu;
-		}
 	}
 	return 0;
 }
@@ -609,14 +535,10 @@ int CommunityBansMenu(Menu menu, MenuAction action, int client, int itemNum)
 		case MenuAction_Cancel: 
 		{
 			if (itemNum == MenuCancel_ExitBack)
-			{
 				Command_NDA(client, 0);
-			}
 		}
 		case MenuAction_End:
-		{
 			delete menu;
-		}
 	}
 	return 0;
 }
@@ -631,9 +553,7 @@ void InitRecentBansMenu(int client)
 	bool bMenu;
 	int days = cvarBansRecent.IntValue;
 	if (days < 0)
-	{
 		days = -days;
-	}
 	
 	for (int i = 1; i <= MaxClients; i++)
 	{
@@ -678,14 +598,10 @@ int RecentBansMenu(Menu menu, MenuAction action, int client, int itemNum)
 		case MenuAction_Cancel: 
 		{
 			if (itemNum == MenuCancel_ExitBack)
-			{
 				Command_NDA(client, 0);
-			}
 		}
 		case MenuAction_End:
-		{
 			delete menu;
-		}
 	}
 	return 0;
 }
@@ -727,9 +643,7 @@ Action Command_CheckMePls(int client, int args)
 public void OnClientDisconnect(int client)
 {
 	if (g_iClientDatabaseStatus[client])
-	{
 		InsertUpdatePlayer(client, g_iClientDatabaseCSGOLevel[client], g_iClientDatabaseCSGOCoin[client], g_bPrime[client], g_iClientDatabasePlaytime[client], g_iClientDatabaseSteamLevel[client], g_iClientDatabaseSteamAge[client]);
-	}
 	ResetClientVars(client);
 }
 
@@ -908,6 +822,28 @@ void CheckCountry(int client)
 	ServerCommand(command);
 }
 
+/*
+Writes to a string the database status.
+----------
+int status		g_iClientDatabaseStatus[client].
+char buffer		String to write to.
+int bufferSize	Size of the buffer.
+*/
+void SetDatabaseStatusString(int status, char[] buffer, int bufferSize)
+{
+	switch (status)
+	{
+		case 1:
+			strcopy(buffer, bufferSize, "Checked");
+		case 2:
+			strcopy(buffer, bufferSize, "Checked and should be updated");
+		case 3:
+			strcopy(buffer, bufferSize, "Checked and doesn't exist");
+		default:
+			strcopy(buffer, bufferSize, "Unknown / ERROR");
+	}
+}
+
 //public void OnClientAuthorized(int client)
 public void OnClientPostAdminCheck(int client)
 {
@@ -918,6 +854,20 @@ public void OnClientPostAdminCheck(int client)
 	{
 		CheckSQLPlayer(client);
 		return;
+	}
+	
+	if (cvarDatabase.BoolValue && cvarLog.IntValue == 3)
+	{
+		char buffer[360]; // that's a lot of space! :o (probably too much, but hey, I don't want to count)
+		GetClientAuthId(client, AuthId_Steam2, buffer, sizeof(buffer));	
+		char sStatus[40];
+		SetDatabaseStatusString(g_iClientDatabaseStatus[client], sStatus, sizeof(sStatus));
+		Format(buffer, sizeof(buffer), "%N (%s) database status: %s", client, buffer, sStatus);
+		
+		
+		Format(buffer, sizeof(buffer), "%s\nValues: csgo_level=%i, csgo_coin=%i, prime=%i, csgo_playtime=%i (minutes), steam_level=%i, steam_age=%i (minutes), last_check=%i (timestamp)",
+			buffer, g_iClientDatabaseCSGOLevel[client], g_iClientDatabaseCSGOCoin[client], g_bPrime[client], g_iClientDatabasePlaytime[client], g_iClientDatabaseSteamLevel[client], g_iClientDatabaseSteamAge[client], g_iClientLastCheck[client]);
+		LogMessage(buffer);
 	}
 	
 	g_iClientChecks[client] = g_iChecks; // dynamic check count for each player. Meant for method whitelist.
@@ -1337,9 +1287,7 @@ void VerifPlaytime(int client, int iPlayTime, bool database)
 			return;
 		}
 		if (kick)
-		{
 			KickClient(client, "%t", "Kicked_PrivatePlaytime");
-		}
 		else
 		{
 			g_bClientPrivatePlaytime[client] = true;
@@ -1361,22 +1309,14 @@ void VerifPlaytime(int client, int iPlayTime, bool database)
 			if (hours > 1)
 			{
 				if (minutes)
-				{
 					KickClient(client, "%t", "Kicked_NotEnoughPlaytime", "Time_HoursAndMins", hours, minutes);
-				}
 				else
-				{
 					KickClient(client, "%t", "Kicked_NotEnoughPlaytime", "Time_Hours", hours);
-				}
 			}
 			else if (hours)
-			{
 				KickClient(client, "%t", "Kicked_NotEnoughPlaytime", "Time_Hour");
-			}
 			else // minutes only
-			{
 				KickClient(client, "%t", "Kicked_NotEnoughPlaytime", "Time_Mins", minutes);
-			}
 		}
 		else
 		{
@@ -1779,10 +1719,8 @@ void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 
 void PassedCheck(int client, char[] reason)
 {
-	if (cvarLog.IntValue == 1)
-	{
+	if (cvarLog.IntValue == 1 || cvarLog.IntValue == 3)
 		LogMessage("Approved %L (%s)", client, reason);
-	}
 }
 
 void SendDiscordMessage(char[] title, char[] message, int client=0)
@@ -1977,6 +1915,7 @@ void InsertUpdatePlayer(int client, int csgo_level, int csgo_coin, bool prime, i
 {
 	char steamid[32];
 	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+	int last_check = (g_iClientDatabaseStatus[client] == 1) ? g_iClientLastCheck[client] : GetTime(); // Keep old last_check if status == 1, else update it.
 	
 	Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "REPLACE INTO players("
 												... "steamid, "
@@ -1995,8 +1934,19 @@ void InsertUpdatePlayer(int client, int csgo_level, int csgo_coin, bool prime, i
 												... "'%i', "
 												... "'%i', "
 												... "'%i', "
-												... "'%i')", steamid, csgo_level, csgo_coin, prime, csgo_playtime, steam_level, steam_age, (g_iClientDatabaseStatus[client] == 1) ? g_iClientLastCheck[client] : GetTime()); // Keep old last_check, else update it. Only update it if status != 1
+												... "'%i')", steamid, csgo_level, csgo_coin, prime, csgo_playtime, steam_level, steam_age, last_check);
 	g_hDB.Query(SQL_NullCallback, g_sSQLBuffer);
+	
+	if (cvarLog.IntValue == 3)
+	{
+		char buffer[280];
+		GetClientAuthId(client, AuthId_Steam2, buffer, sizeof(buffer));
+		char sStatus[40];
+		SetDatabaseStatusString(g_iClientDatabaseStatus[client], sStatus, sizeof(sStatus));
+		Format(buffer, sizeof(buffer), "Updated %N (%s) [%s] into the database: csgo_level=%i, csgo_coin=%i, prime=%i, csgo_playtime=%i (minutes), steam_level=%i, steam_age=%i (minutes), last_check=%i (timestamp)",
+										client, buffer, sStatus, csgo_level, csgo_coin, prime, csgo_playtime, steam_level, steam_age, last_check);
+		LogMessage(buffer);
+	}
 }
 
 /* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
