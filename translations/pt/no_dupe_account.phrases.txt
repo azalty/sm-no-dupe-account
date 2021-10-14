@@ -84,7 +84,7 @@
 	
 	"Kicked_Bans_Recent"
 	{
-		"pt"	"Você foi banido VAC/Game recentemente. Como medida de segurança, você não pode se conectar ao servidor"
+		"pt"	"Você foi recebeu VAC/Game Ban recentemente. Como medida de segurança, você não pode se conectar ao servidor"
 	}
 	
 	// ---------------------------------------
