@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.0 Beta 2"
+#define PLUGIN_VERSION "1.5.0 Beta 3"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -1636,8 +1636,29 @@ void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 	
 	char sArray[6][64]; // cut the last one
 	ExplodeString(sBody, ",", sArray, sizeof(sArray), sizeof(sArray[]));
+	
+	/*
+		Example of the API output:
+		{"players":[{"SteamId":"76561198074861737","CommunityBanned":false,"VACBanned":false,"NumberOfVACBans":0,"DaysSinceLastBan":0,"NumberOfGameBans":0,"EconomyBan":"none"}]}
+	*/
+	
+	// CommunityBanned field check
 	if (StrContains(sArray[1], "false") == -1) // doesn't contain 'false'
 	{
+		/*
+			If it doesn't contain 'true' too, it means the Steam API is bugged because the CommunityBanned field is missing.
+			Steam could be in maintenance.
+			This experimental fix aims at detecting whenever Steam is in maintenance in order not to kick people that fail this verification.
+			It also stops all future verifications about bans, this way, no weird values!
+			-
+			Issue link: https://github.com/azalty/sm-no-dupe-account/issues/28
+		*/
+		if (StrContains(sArray[1], "true") == -1)
+		{
+			LogError("Steam Bans request failed: CommunityBanned field is missing (potential Steam maintenance)!");
+			return;
+		}
+		
 		g_bCommunityBanned[client] = true;
 	}
 	g_iVACBans[client] = StringToInt(sArray[3][18]) // get everything after ':', aka the integer
