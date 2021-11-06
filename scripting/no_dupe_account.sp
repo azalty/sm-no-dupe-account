@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.0 Beta 3"
+#define PLUGIN_VERSION "1.5.0 Beta 4"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -1079,7 +1079,7 @@ void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, 
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Check IP request failed!");
+		LogError("Check IP request failed! - Status Code: %i", eStatusCode);
 		if ((cvarVPN.IntValue == 2) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1214,7 +1214,7 @@ void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Playtime request failed!");
+		LogError("Playtime request failed! - Status Code: %i", eStatusCode);
 		if ((cvarPlaytime.IntValue > 0) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1352,7 +1352,7 @@ void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSucc
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Steam Level request failed!");
+		LogError("Steam Level request failed! - Status Code: %i", eStatusCode);
 		if ((cvarSteamLevel.IntValue > 0) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1493,7 +1493,7 @@ void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Steam Age request failed!");
+		LogError("Steam Age request failed! - Status Code: %i", eStatusCode);
 		int iMode, iRequiredAge;
 		RetrieveSteamAgeMode(iMode, iRequiredAge);
 		if (!iMode && client)
@@ -1614,7 +1614,7 @@ void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 {
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Steam Bans request failed!");
+		LogError("Steam Bans request failed! - Status Code: %i", eStatusCode);
 		delete hRequest;
 		return;
 	}
@@ -1655,7 +1655,8 @@ void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 		*/
 		if (StrContains(sArray[1], "true") == -1)
 		{
-			LogError("Steam Bans request failed: CommunityBanned field is missing (potential Steam maintenance)!");
+			LogError("Steam Bans request failed: CommunityBanned field is missing (potential Steam maintenance)! - Status Code: %i", eStatusCode);
+			LogMessage("[DEBUG] Steam Bans request body: %s", sBody);
 			return;
 		}
 		
