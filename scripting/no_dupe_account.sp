@@ -8,9 +8,14 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.0 Beta 4"
+#define PLUGIN_VERSION "1.5.0 Beta 5"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
+
+#define HTTP_REQUEST_TIMEOUT_DELAY 5 // Amount of seconds before HTTP Requests timeout
+
+#define HTTP_REQUEST_RETRY_DELAY 5.0 // (float) Amount of seconds to wait before retrying an HTTP Request that failed
+#define HTTP_REQUEST_RETRY_MAX 4 // Maximum amount of HTTP Request tries. Includes the original try, so the minimum is 1. (Example: 3 = 1 try and 2 retries)
 
 int g_iChecks; // amount of checks
 int g_iClientChecks[MAXPLAYERS + 1];
@@ -26,6 +31,8 @@ int g_iClientDatabaseSteamAge[MAXPLAYERS + 1] = {-1, ...};
 int g_iClientDatabaseCSGOLevel[MAXPLAYERS + 1] = {-1, ...};
 int g_iClientDatabaseCSGOCoin[MAXPLAYERS + 1];
 int g_iClientLastCheck[MAXPLAYERS + 1];
+
+int g_iMapID; // Starts from zero, and increments by 1 every time a new map is loaded. Used for HTTP Requests' DataPacks.
 
 bool g_bClientPassedCheck[MAXPLAYERS + 1];
 bool g_bClientPrivatePlaytime[MAXPLAYERS + 1];
@@ -269,6 +276,11 @@ void OnSteamAgeChange(ConVar convar, char[] oldValue, char[] newValue)
 void OnHostnameChange(ConVar convar, char[] oldValue, char[] newValue)
 {
 	strcopy(g_sHostname, sizeof(g_sHostname), newValue);
+}
+
+public void OnMapStart()
+{
+	g_iMapID += 1;
 }
 
 Action Command_NDA(int client, int args)
@@ -1066,20 +1078,82 @@ void CheckIP(int client, char[] ip, bool dontNotify = false)
 {
 	Format(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer), "http://blackbox.ipinfo.app/lookup/%s", ip);
 	
+	DataPack hData = new DataPack();
+	hData.WriteCell(GetClientUserId(client));
+	DataPackPos hPos = hData.Position;
+	hData.WriteCell(0); // Number of tries. Starts at 0 because CheckIP_Try increments it.
+	hData.WriteString(g_sRequestURLBuffer);
+	hData.WriteCell(g_iMapID); // Current Map ID. Will be used to check if map changed during the timer's execution.
+	hData.WriteCell(dontNotify);
+	
+	CheckIP_Try(hData, hPos);
+}
+
+/*
+Sends an HTTP Request to check the player's IP.
+DataPack hData		Check CheckIP() for what to put inside.
+DataPackPos hPos	Position to read/write the second item inside the DataPack. Will increment this item (try+1) and then read the request.
+*/
+void CheckIP_Try(DataPack hData, DataPackPos hPos)
+{
+	hData.Reset();
+	if (!GetClientOfUserId(hData.ReadCell())) // Disconnect verification. I know it is useless on the first try but I don't mind.
+	{
+		delete hData;
+		return;
+	}
+	
+	hData.Position = hPos;
+	int iTries = hData.ReadCell();
+	hData.Position = hPos;
+	hData.WriteCell(iTries + 1, false);
+	hData.ReadString(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer));
+	
+	// Map ID verification. Check if the map changed during the timer's execution.
+	if (hData.ReadCell() != g_iMapID)
+	{
+		delete hData;
+		return;
+	}
+	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
-	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client), dontNotify);
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	SteamWorks_SetHTTPRequestContextValue(hRequest, hData, hData.ReadCell());
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckIPResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid, bool dontNotify)
+Action Timer_CheckIP_Try(Handle timer, DataPack hDataTimer)
 {
-	int client = GetClientOfUserId(userid);
+	hDataTimer.Reset();
+	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
+	CheckIP_Try(hData, hDataTimer.ReadCell());
+	delete hDataTimer;
+}
+
+void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData, bool dontNotify)
+{
+	hData.Reset();
+	int client = GetClientOfUserId(hData.ReadCell());
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Check IP request failed! - Status Code: %i", eStatusCode);
+		DataPackPos hPos = hData.Position;
+		int iTries = hData.ReadCell();
+		
+		if (HTTPRequestFailMessage("Check IP", eStatusCode, iTries))
+		{
+			DataPack hDataTimer = new DataPack();
+			hDataTimer.WriteCell(hData);
+			hDataTimer.WriteCell(hPos);
+			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckIP_Try, hDataTimer);
+			
+			// Don't delete hData because it'll be used by CheckIP_Try()
+			delete hRequest;
+			return;
+		}
+		
+		delete hData;
 		if ((cvarVPN.IntValue == 2) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1092,6 +1166,8 @@ void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, 
 		delete hRequest;
 		return;
 	}
+	
+	delete hData;
 	
 	if (!client)
 	{
@@ -1200,21 +1276,82 @@ void CheckPlaytime(int client)
 	char steamid[64];
 	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
 	Format(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer), "http://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=%s&include_played_free_games=1&appids_filter[0]=730&steamid=%s", g_sSteamAPIKey, steamid);
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	
-	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	DataPack hData = new DataPack();
+	hData.WriteCell(GetClientUserId(client));
+	DataPackPos hPos = hData.Position;
+	hData.WriteCell(0); // Number of tries. Starts at 0 because CheckPlaytime_Try increments it.
+	hData.WriteString(g_sRequestURLBuffer);
+	hData.WriteCell(g_iMapID); // Current Map ID. Will be used to check if map changed during the timer's execution.
+	
+	CheckPlaytime_Try(hData, hPos);
+}
+
+/*
+Sends an HTTP Request to check the player's Playtime.
+DataPack hData		Check CheckPlaytime() for what to put inside.
+DataPackPos hPos	Position to read/write the second item inside the DataPack. Will increment this item (try+1) and then read the request.
+*/
+void CheckPlaytime_Try(DataPack hData, DataPackPos hPos)
+{
+	hData.Reset();
+	if (!GetClientOfUserId(hData.ReadCell())) // Disconnect verification. I know it is useless on the first try but I don't mind.
+	{
+		delete hData;
+		return;
+	}
+	
+	hData.Position = hPos;
+	int iTries = hData.ReadCell();
+	hData.Position = hPos;
+	hData.WriteCell(iTries + 1, false);
+	hData.ReadString(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer));
+	
+	// Map ID verification. Check if the map changed during the timer's execution.
+	if (hData.ReadCell() != g_iMapID)
+	{
+		delete hData;
+		return;
+	}
+	
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
+	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckPlaytimeResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+Action Timer_CheckPlaytime_Try(Handle timer, DataPack hDataTimer)
 {
-	int client = GetClientOfUserId(userid);
+	hDataTimer.Reset();
+	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
+	CheckPlaytime_Try(hData, hDataTimer.ReadCell());
+	delete hDataTimer;
+}
+
+void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
+{
+	hData.Reset();
+	int client = GetClientOfUserId(hData.ReadCell());
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Playtime request failed! - Status Code: %i", eStatusCode);
+		DataPackPos hPos = hData.Position;
+		int iTries = hData.ReadCell();
+		
+		if (HTTPRequestFailMessage("Playtime", eStatusCode, iTries))
+		{
+			DataPack hDataTimer = new DataPack();
+			hDataTimer.WriteCell(hData);
+			hDataTimer.WriteCell(hPos);
+			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckPlaytime_Try, hDataTimer);
+			
+			// Don't delete hData because it'll be used by CheckIP_Try()
+			delete hRequest;
+			return;
+		}
+		
+		delete hData;
 		if ((cvarPlaytime.IntValue > 0) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1227,6 +1364,8 @@ void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 		delete hRequest;
 		return;
 	}
+	
+	delete hData;
 	
 	if (!client)
 	{
@@ -1338,21 +1477,78 @@ void CheckSteamLevel(int client)
 	char steamid[64];
 	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
 	Format(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer), "http://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key=%s&steamid=%s", g_sSteamAPIKey, steamid);
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	
-	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	DataPack hData = new DataPack();
+	hData.WriteCell(GetClientUserId(client));
+	DataPackPos hPos = hData.Position;
+	hData.WriteCell(0);
+	hData.WriteString(g_sRequestURLBuffer);
+	hData.WriteCell(g_iMapID);
+	
+	CheckSteamLevel_Try(hData, hPos);
+}
+
+// Really similar to CheckPlaytime_Try(), check it for more infos.
+void CheckSteamLevel_Try(DataPack hData, DataPackPos hPos)
+{
+	hData.Reset();
+	if (!GetClientOfUserId(hData.ReadCell())) // Disconnect verification. I know it is useless on the first try but I don't mind.
+	{
+		delete hData;
+		return;
+	}
+	
+	hData.Position = hPos;
+	int iTries = hData.ReadCell();
+	hData.Position = hPos;
+	hData.WriteCell(iTries + 1, false);
+	hData.ReadString(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer));
+	
+	// Map ID verification. Check if the map changed during the timer's execution.
+	if (hData.ReadCell() != g_iMapID)
+	{
+		delete hData;
+		return;
+	}
+	
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
+	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamLevelResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+Action Timer_CheckSteamLevel_Try(Handle timer, DataPack hDataTimer)
 {
-	int client = GetClientOfUserId(userid);
+	hDataTimer.Reset();
+	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
+	CheckSteamLevel_Try(hData, hDataTimer.ReadCell());
+	delete hDataTimer;
+}
+
+void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
+{
+	hData.Reset();
+	int client = GetClientOfUserId(hData.ReadCell());
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Steam Level request failed! - Status Code: %i", eStatusCode);
+		DataPackPos hPos = hData.Position;
+		int iTries = hData.ReadCell();
+		
+		if (HTTPRequestFailMessage("Steam Level", eStatusCode, iTries))
+		{
+			DataPack hDataTimer = new DataPack();
+			hDataTimer.WriteCell(hData);
+			hDataTimer.WriteCell(hPos);
+			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckSteamLevel_Try, hDataTimer);
+			
+			// Don't delete hData because it'll be used by CheckSteamLevel_Try()
+			delete hRequest;
+			return;
+		}
+		
+		delete hData;
 		if ((cvarSteamLevel.IntValue > 0) && client)
 		{
 			if (!g_bClientPassedCheck[client])
@@ -1365,6 +1561,8 @@ void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSucc
 		delete hRequest;
 		return;
 	}
+	
+	delete hData;
 	
 	if (!client)
 	{
@@ -1459,12 +1657,53 @@ void CheckSteamAge(int client)
 	char steamid[64];
 	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
 	Format(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer), "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=%s&steamids=%s", g_sSteamAPIKey, steamid);
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	
-	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	DataPack hData = new DataPack();
+	hData.WriteCell(GetClientUserId(client));
+	DataPackPos hPos = hData.Position;
+	hData.WriteCell(0);
+	hData.WriteString(g_sRequestURLBuffer);
+	hData.WriteCell(g_iMapID);
+	
+	CheckSteamAge_Try(hData, hPos);
+}
+
+// Really similar to CheckPlaytime_Try(), check it for more infos.
+void CheckSteamAge_Try(DataPack hData, DataPackPos hPos)
+{
+	hData.Reset();
+	if (!GetClientOfUserId(hData.ReadCell())) // Disconnect verification. I know it is useless on the first try but I don't mind.
+	{
+		delete hData;
+		return;
+	}
+	
+	hData.Position = hPos;
+	int iTries = hData.ReadCell();
+	hData.Position = hPos;
+	hData.WriteCell(iTries + 1, false);
+	hData.ReadString(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer));
+	
+	// Map ID verification. Check if the map changed during the timer's execution.
+	if (hData.ReadCell() != g_iMapID)
+	{
+		delete hData;
+		return;
+	}
+	
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
+	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamAgeResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
+}
+
+Action Timer_CheckSteamAge_Try(Handle timer, DataPack hDataTimer)
+{
+	hDataTimer.Reset();
+	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
+	CheckSteamAge_Try(hData, hDataTimer.ReadCell());
+	delete hDataTimer;
 }
 
 // sets iMode to the correct mode: 0 = positive, 1 = negative, 2 = '~'
@@ -1487,13 +1726,29 @@ void RetrieveSteamAgeMode(int& iMode, int& iRequiredAge)
 	}
 }
 
-void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
 {
-	int client = GetClientOfUserId(userid);
+	hData.Reset();
+	int client = GetClientOfUserId(hData.ReadCell());
 	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Steam Age request failed! - Status Code: %i", eStatusCode);
+		DataPackPos hPos = hData.Position;
+		int iTries = hData.ReadCell();
+		
+		if (HTTPRequestFailMessage("Steam Age", eStatusCode, iTries))
+		{
+			DataPack hDataTimer = new DataPack();
+			hDataTimer.WriteCell(hData);
+			hDataTimer.WriteCell(hPos);
+			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckSteamAge_Try, hDataTimer);
+			
+			// Don't delete hData because it'll be used by CheckSteamAge_Try()
+			delete hRequest;
+			return;
+		}
+		
+		delete hData;
 		int iMode, iRequiredAge;
 		RetrieveSteamAgeMode(iMode, iRequiredAge);
 		if (!iMode && client)
@@ -1508,6 +1763,8 @@ void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 		delete hRequest;
 		return;
 	}
+	
+	delete hData;
 	
 	if (!client)
 	{
@@ -1602,24 +1859,85 @@ void CheckSteamBans(int client)
 	char steamid[64];
 	GetClientAuthId(client, AuthId_SteamID64, steamid, sizeof(steamid));
 	Format(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer), "http://api.steampowered.com/ISteamUser/GetPlayerBans/v1/?key=%s&steamids=%s", g_sSteamAPIKey, steamid);
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	
-	SteamWorks_SetHTTPRequestContextValue(hRequest, GetClientUserId(client));
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 5);
+	DataPack hData = new DataPack();
+	hData.WriteCell(GetClientUserId(client));
+	DataPackPos hPos = hData.Position;
+	hData.WriteCell(0);
+	hData.WriteString(g_sRequestURLBuffer);
+	hData.WriteCell(g_iMapID);
+	
+	CheckSteamBans_Try(hData, hPos);
+}
+
+// Really similar to CheckPlaytime_Try(), check it for more infos.
+void CheckSteamBans_Try(DataPack hData, DataPackPos hPos)
+{
+	hData.Reset();
+	if (!GetClientOfUserId(hData.ReadCell())) // Disconnect verification. I know it is useless on the first try but I don't mind.
+	{
+		delete hData;
+		return;
+	}
+	
+	hData.Position = hPos;
+	int iTries = hData.ReadCell();
+	hData.Position = hPos;
+	hData.WriteCell(iTries + 1, false);
+	hData.ReadString(g_sRequestURLBuffer, sizeof(g_sRequestURLBuffer));
+	
+	// Map ID verification. Check if the map changed during the timer's execution.
+	if (hData.ReadCell() != g_iMapID)
+	{
+		delete hData;
+		return;
+	}
+	
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
+	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamBansResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
 
-void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int userid)
+Action Timer_CheckSteamBans_Try(Handle timer, DataPack hDataTimer)
 {
+	hDataTimer.Reset();
+	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
+	CheckSteamBans_Try(hData, hDataTimer.ReadCell());
+	delete hDataTimer;
+}
+
+void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
+{
+	hData.Reset();
+	int client = GetClientOfUserId(hData.ReadCell());
+	
 	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
 	{
-		LogError("Steam Bans request failed! - Status Code: %i", eStatusCode);
+		DataPackPos hPos = hData.Position;
+		int iTries = hData.ReadCell();
+		
+		if (HTTPRequestFailMessage("Steam Bans", eStatusCode, iTries))
+		{
+			DataPack hDataTimer = new DataPack();
+			hDataTimer.WriteCell(hData);
+			hDataTimer.WriteCell(hPos);
+			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckSteamBans_Try, hDataTimer);
+			
+			// Don't delete hData because it'll be used by CheckSteamBans_Try()
+			delete hRequest;
+			return;
+		}
+		// This part of the code isn't optimized because it could cause mistakes in the future if this part gets modified.
+		
+		delete hData;
 		delete hRequest;
 		return;
 	}
 	
-	int client = GetClientOfUserId(userid);
+	delete hData;
+	
 	if (!client)
 	{
 		delete hRequest;
@@ -1969,6 +2287,31 @@ void InsertUpdatePlayer(int client, int csgo_level, int csgo_coin, bool prime, i
 										client, buffer, sStatus, csgo_level, csgo_coin, prime, csgo_playtime, steam_level, steam_age, last_check);
 		LogMessage(buffer);
 	}
+}
+
+/*
+Logs an error if an HTTP Request fails.
+Returns wether or not we should retry.
+---
+char[] sRequestName				The name of the request.
+EHTTPStatusCode eStatusCode		The HTTP status code that we got.
+int iTries						The number of tries we did.
+---
+return true						We should retry.
+return false					We shouldn't retry (max tries reached, or invalid Steam API Key)
+*/
+bool HTTPRequestFailMessage(char[] sRequestName, EHTTPStatusCode eStatusCode, int iTries)
+{
+	LogError("%s request failed! - Status Code: %i - Try %i/%i", sRequestName, eStatusCode, iTries, HTTP_REQUEST_RETRY_MAX);
+	if (eStatusCode == k_EHTTPStatusCode401Unauthorized || eStatusCode == k_EHTTPStatusCode403Forbidden)
+	{
+		LogError("It seems that you got a <401> or <403> HTTP Status Code, which indicates that your Steam API Key isn't valid. Please verify the cvar nda_steamapi_key.");
+		return false;
+	}
+	if (iTries >= HTTP_REQUEST_RETRY_MAX)
+		return false;
+	
+	return true;
 }
 
 /* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
