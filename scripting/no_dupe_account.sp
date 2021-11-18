@@ -1,21 +1,16 @@
 #include <sourcemod>
 #include <sdktools>
 #include <geoip>
-#include <autoexecconfig>
+#include <convar_class>
 #include <colorvariables>
 #undef REQUIRE_PLUGIN
 #undef REQUIRE_EXTENSIONS
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.0 Beta 5"
+#define PLUGIN_VERSION "1.5.0 Beta 6"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
-
-#define HTTP_REQUEST_TIMEOUT_DELAY 5 // Amount of seconds before HTTP Requests timeout
-
-#define HTTP_REQUEST_RETRY_DELAY 5.0 // (float) Amount of seconds to wait before retrying an HTTP Request that failed
-#define HTTP_REQUEST_RETRY_MAX 4 // Maximum amount of HTTP Request tries. Includes the original try, so the minimum is 1. (Example: 3 = 1 try and 2 retries)
 
 int g_iChecks; // amount of checks
 int g_iClientChecks[MAXPLAYERS + 1];
@@ -65,31 +60,35 @@ KeyValues g_hConfig;
 
 // Cvars
 
-ConVar cvarSteamAPIKey;
-ConVar cvarDiscord;
-ConVar cvarDatabase;
-ConVar cvarDatabaseRefresh;
-ConVar cvarDatabaseExpire;
-ConVar cvarVPN;
-ConVar cvarLevel;
-ConVar cvarPrime;
-ConVar cvarPlaytime;
-ConVar cvarSteamLevel;
-ConVar cvarSteamAge;
-ConVar cvarCoin;
-ConVar cvarBansVAC;
-ConVar cvarBansGame;
-ConVar cvarBansCommunity;
-ConVar cvarBansTotal;
-ConVar cvarBansRecent;
-ConVar cvarLog;
+Convar cvarSteamAPIKey;
+Convar cvarDiscord;
+Convar cvarDatabase;
+Convar cvarDatabaseRefresh;
+Convar cvarDatabaseExpire;
+Convar cvarVPN;
+Convar cvarLevel;
+Convar cvarPrime;
+Convar cvarPlaytime;
+Convar cvarSteamLevel;
+Convar cvarSteamAge;
+Convar cvarCoin;
+Convar cvarBansVAC;
+Convar cvarBansGame;
+Convar cvarBansCommunity;
+Convar cvarBansTotal;
+Convar cvarBansRecent;
+Convar cvarLog;
+
+Convar cvarHTTPRequestTimeoutDelay;
+Convar cvarHTTPRequestRetryDelay;
+Convar cvarHTTPRequestRetryMax;
 
 ConVar cvarHostname;
 
 public Plugin myinfo = 
 {
 	name = "No Dupe Account",
-	author = "azalty/rlevet",
+	author = "azalty",
 	description = "Prevents duplicated or new accounts from accessing the server",
 	version = PLUGIN_VERSION,
 	url = "github.com/azalty/sm-no-dupe-account"
@@ -97,32 +96,40 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	// Cvars
+	// Cvars	
+	// github.com/kidfearless/Auto-Exec-Config-Class
 	
-	AutoExecConfig_SetFile("no_dupe_account");
-	AutoExecConfig_SetCreateFile(true);
+	// no_dupe_account.cfg
+	cvarSteamAPIKey = new Convar("nda_steamapi_key", "", "(Requires SteamWorks)\nA SteamAPI key that will be used to check playtime\nGet your own at: https://steamcommunity.com/dev/apikey\nThis is a sensitive key, don't share it!\nNeeded to get the playtime or prime status", FCVAR_PROTECTED);
+	cvarDiscord = new Convar("nda_discord", "", "(Requires Discord API and SteamWorks)\nDiscord integration with a webhook\nempty = disabled\nwebhook url = enable", FCVAR_PROTECTED);
+	cvarDatabase = new Convar("nda_database", "1", "Enable saving player values in a database.\nWill act as a cache, if a player doesn't want to keep is profile public, he can join once while it's public and it won't deny him in the future.\n1 = enabled\n0 = disabled\nDatabase config name: 'no_dupe_account'");
+	cvarDatabaseRefresh = new Convar("nda_database_refresh", "1440", "(Requires Database)\nany integer = refresh players values if older than X minutes\n0 = never refresh (recommended if you don't plan on using the DB for other reasons)\nNOTE: Player values will ALWAYS refresh if they are denied, but this will NOT count as a true full refresh");
+	cvarDatabaseExpire = new Convar("nda_database_expire", "365", "(Requires Database)\nany integer = players values are deleted if older than X days (using refresh as well is recommended)\n0 = keep player values forever\nNOTE: Deleting really old values of players that don't play anymore is recommended");
+	cvarVPN = new Convar("nda_vpn", "1", "(Requires SteamWorks)\n0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
+	cvarLevel = new Convar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
+	cvarPrime = new Convar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players");
+	cvarPlaytime = new Convar("nda_playtime", "120", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if he has less mins in playtime than asked or has private hours\nany negative integer = same as positive, but is not a check and will kick user");
+	cvarSteamLevel = new Convar("nda_steam_level", "5", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
+	cvarSteamAge = new Convar("nda_steam_age", "1576800", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam account age is newer than this value in minutes or his profile is private\nany negative integer = same as positive, but is not a check and will kick user\n~integer (ex: ~60) = same as negative, but will not kick user if his profile is private");
+	cvarCoin = new Convar("nda_coin", "1", "0 = disabled\n1 = is a user check that fails if he doesn't have any CS:GO coin/badge equipped\n2 = kick user if he doesn't have any CS:GO coin/badge equipped (this is not recommended as a lot of players don't have a coin)");
+	cvarBansVAC = new Convar("nda_bans_vac", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been VAC banned at least X times");
+	cvarBansGame = new Convar("nda_bans_game", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been Game banned at least X times");
+	cvarBansCommunity = new Convar("nda_bans_community", "2", "(Requires SteamAPI Key)\n0 = disabled\n1 = kick player if he is community banned (spam, phishing, nudity...)\nThese people will have private profiles and are unable to add friends or comment.\n2 = send an in-game alert to admins if player is community banned (and a discord message if setup)");
+	cvarBansTotal = new Convar("nda_bans_total", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been banned at least X times (VAC+Game bans)");
+	cvarBansRecent = new Convar("nda_bans_recent", "5", "(Requires SteamAPI Key)\n0 = disabled\nany positive integer = send an in-game alert to admins (and a discord message if setup) if player has been VAC or Game banned X days ago or less\nany negative integer = same as positive integer, but instead of sending an alert, it will kick the player");
+	cvarLog = new Convar("nda_log", "1", "0 = don't log\n1 = log check approvals & refusals to server's console\n2 = log check refusals to server's console\n3 = log approvals, refusals and developer infos (useful for debugging or manual profiling of players)");
 	
-	cvarSteamAPIKey = AutoExecConfig_CreateConVar("nda_steamapi_key", "", "(Requires SteamWorks)\nA SteamAPI key that will be used to check playtime\nGet your own at: https://steamcommunity.com/dev/apikey\nThis is a sensitive key, don't share it!\nNeeded to get the playtime or prime status", FCVAR_PROTECTED);
-	cvarDiscord = AutoExecConfig_CreateConVar("nda_discord", "", "(Requires Discord API and SteamWorks)\nDiscord integration with a webhook\nempty = disabled\nwebhook url = enable", FCVAR_PROTECTED);
-	cvarDatabase = AutoExecConfig_CreateConVar("nda_database", "1", "Enable saving player values in a database.\nWill act as a cache, if a player doesn't want to keep is profile public, he can join once while it's public and it won't deny him in the future.\n1 = enabled\n0 = disabled\nDatabase config name: 'no_dupe_account'");
-	cvarDatabaseRefresh = AutoExecConfig_CreateConVar("nda_database_refresh", "1440", "(Requires Database)\nany integer = refresh players values if older than X minutes\n0 = never refresh (recommended if you don't plan on using the DB for other reasons)\nNOTE: Player values will ALWAYS refresh if they are denied, but this will NOT count as a true full refresh");
-	cvarDatabaseExpire = AutoExecConfig_CreateConVar("nda_database_expire", "365", "(Requires Database)\nany integer = players values are deleted if older than X days (using refresh as well is recommended)\n0 = keep player values forever\nNOTE: Deleting really old values of players that don't play anymore is recommended");
-	cvarVPN = AutoExecConfig_CreateConVar("nda_vpn", "1", "(Requires SteamWorks)\n0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
-	cvarLevel = AutoExecConfig_CreateConVar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
-	cvarPrime = AutoExecConfig_CreateConVar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players");
-	cvarPlaytime = AutoExecConfig_CreateConVar("nda_playtime", "120", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if he has less mins in playtime than asked or has private hours\nany negative integer = same as positive, but is not a check and will kick user");
-	cvarSteamLevel = AutoExecConfig_CreateConVar("nda_steam_level", "5", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
-	cvarSteamAge = AutoExecConfig_CreateConVar("nda_steam_age", "1576800", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam account age is newer than this value in minutes or his profile is private\nany negative integer = same as positive, but is not a check and will kick user\n~integer (ex: ~60) = same as negative, but will not kick user if his profile is private");
-	cvarCoin = AutoExecConfig_CreateConVar("nda_coin", "1", "0 = disabled\n1 = is a user check that fails if he doesn't have any CS:GO coin/badge equipped\n2 = kick user if he doesn't have any CS:GO coin/badge equipped (this is not recommended as a lot of players don't have a coin)");
-	cvarBansVAC = AutoExecConfig_CreateConVar("nda_bans_vac", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been VAC banned at least X times");
-	cvarBansGame = AutoExecConfig_CreateConVar("nda_bans_game", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been Game banned at least X times");
-	cvarBansCommunity = AutoExecConfig_CreateConVar("nda_bans_community", "2", "(Requires SteamAPI Key)\n0 = disabled\n1 = kick player if he is community banned (spam, phishing, nudity...)\nThese people will have private profiles and are unable to add friends or comment.\n2 = send an in-game alert to admins if player is community banned (and a discord message if setup)");
-	cvarBansTotal = AutoExecConfig_CreateConVar("nda_bans_total", "0", "(Requires SteamAPI Key)\n0 = disabled\nany integer = kick player if he has been banned at least X times (VAC+Game bans)");
-	cvarBansRecent = AutoExecConfig_CreateConVar("nda_bans_recent", "5", "(Requires SteamAPI Key)\n0 = disabled\nany positive integer = send an in-game alert to admins (and a discord message if setup) if player has been VAC or Game banned X days ago or less\nany negative integer = same as positive integer, but instead of sending an alert, it will kick the player");
-	cvarLog = AutoExecConfig_CreateConVar("nda_log", "1", "0 = don't log\n1 = log check approvals & refusals to server's console\n2 = log check refusals to server's console\n3 = log approvals, refusals and developer infos (useful for debugging or manual profiling of players)");
+	Convar.CreateConfig("no_dupe_account");
 	
-	AutoExecConfig_ExecuteFile();
-	AutoExecConfig_CleanFile();
+	// no_dupe_account_advanced.cfg (These cvars can be modified, but they probably shouldn't, as they should work fine by default. This contains advanced config options.)
+	
+	cvarHTTPRequestTimeoutDelay = new Convar("nda_http_request_timeout_delay", "5", "Number of seconds before HTTP Requests timeout", _, true, 3.0);
+	cvarHTTPRequestRetryDelay = new Convar("nda_http_request_retry_delay", "5.0", "Number of seconds to wait before retrying an HTTP Request that failed\nYou probably shouldn't set this too low or too high", _, true, 1.0);
+	cvarHTTPRequestRetryMax = new Convar("nda_http_request_retry_max", "4", "Maximum amount of HTTP Request tries.\nIncludes the original try, so the minimum is 1. (Example: 4 = 1 try and 3 retries)", _, true, 1.0);
+	
+	Convar.CreateConfig("no_dupe_account_advanced");
+	
+	// Other cvars
 	
 	cvarHostname = FindConVar("hostname");
 	cvarHostname.GetString(g_sHostname, sizeof(g_sHostname));
@@ -1118,7 +1125,7 @@ void CheckIP_Try(DataPack hData, DataPackPos hPos)
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	SteamWorks_SetHTTPRequestContextValue(hRequest, hData, hData.ReadCell());
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, cvarHTTPRequestTimeoutDelay.IntValue);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckIPResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
@@ -1146,7 +1153,7 @@ void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, 
 			DataPack hDataTimer = new DataPack();
 			hDataTimer.WriteCell(hData);
 			hDataTimer.WriteCell(hPos);
-			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckIP_Try, hDataTimer);
+			CreateTimer(cvarHTTPRequestRetryDelay.FloatValue, Timer_CheckIP_Try, hDataTimer);
 			
 			// Don't delete hData because it'll be used by CheckIP_Try()
 			delete hRequest;
@@ -1316,7 +1323,7 @@ void CheckPlaytime_Try(DataPack hData, DataPackPos hPos)
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, cvarHTTPRequestTimeoutDelay.IntValue);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckPlaytimeResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
@@ -1344,7 +1351,7 @@ void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 			DataPack hDataTimer = new DataPack();
 			hDataTimer.WriteCell(hData);
 			hDataTimer.WriteCell(hPos);
-			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckPlaytime_Try, hDataTimer);
+			CreateTimer(cvarHTTPRequestRetryDelay.FloatValue, Timer_CheckPlaytime_Try, hDataTimer);
 			
 			// Don't delete hData because it'll be used by CheckIP_Try()
 			delete hRequest;
@@ -1513,7 +1520,7 @@ void CheckSteamLevel_Try(DataPack hData, DataPackPos hPos)
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, cvarHTTPRequestTimeoutDelay.IntValue);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamLevelResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
@@ -1541,7 +1548,7 @@ void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSucc
 			DataPack hDataTimer = new DataPack();
 			hDataTimer.WriteCell(hData);
 			hDataTimer.WriteCell(hPos);
-			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckSteamLevel_Try, hDataTimer);
+			CreateTimer(cvarHTTPRequestRetryDelay.FloatValue, Timer_CheckSteamLevel_Try, hDataTimer);
 			
 			// Don't delete hData because it'll be used by CheckSteamLevel_Try()
 			delete hRequest;
@@ -1693,7 +1700,7 @@ void CheckSteamAge_Try(DataPack hData, DataPackPos hPos)
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, cvarHTTPRequestTimeoutDelay.IntValue);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamAgeResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
@@ -1741,7 +1748,7 @@ void OnCheckSteamAgeResponse(Handle hRequest, bool bFailure, bool bRequestSucces
 			DataPack hDataTimer = new DataPack();
 			hDataTimer.WriteCell(hData);
 			hDataTimer.WriteCell(hPos);
-			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckSteamAge_Try, hDataTimer);
+			CreateTimer(cvarHTTPRequestRetryDelay.FloatValue, Timer_CheckSteamAge_Try, hDataTimer);
 			
 			// Don't delete hData because it'll be used by CheckSteamAge_Try()
 			delete hRequest;
@@ -1895,7 +1902,7 @@ void CheckSteamBans_Try(DataPack hData, DataPackPos hPos)
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, g_sRequestURLBuffer);
 	SteamWorks_SetHTTPRequestContextValue(hRequest, hData);
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, HTTP_REQUEST_TIMEOUT_DELAY);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, cvarHTTPRequestTimeoutDelay.IntValue);
 	SteamWorks_SetHTTPCallbacks(hRequest, OnCheckSteamBansResponse);
 	SteamWorks_SendHTTPRequest(hRequest);
 }
@@ -1923,7 +1930,7 @@ void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 			DataPack hDataTimer = new DataPack();
 			hDataTimer.WriteCell(hData);
 			hDataTimer.WriteCell(hPos);
-			CreateTimer(HTTP_REQUEST_RETRY_DELAY, Timer_CheckSteamBans_Try, hDataTimer);
+			CreateTimer(cvarHTTPRequestRetryDelay.FloatValue, Timer_CheckSteamBans_Try, hDataTimer);
 			
 			// Don't delete hData because it'll be used by CheckSteamBans_Try()
 			delete hRequest;
@@ -2302,13 +2309,13 @@ return false					We shouldn't retry (max tries reached, or invalid Steam API Key
 */
 bool HTTPRequestFailMessage(char[] sRequestName, EHTTPStatusCode eStatusCode, int iTries)
 {
-	LogError("%s request failed! - Status Code: %i - Try %i/%i", sRequestName, eStatusCode, iTries, HTTP_REQUEST_RETRY_MAX);
+	LogError("%s request failed! - Status Code: %i - Try %i/%i", sRequestName, eStatusCode, iTries, cvarHTTPRequestRetryMax.IntValue);
 	if (eStatusCode == k_EHTTPStatusCode401Unauthorized || eStatusCode == k_EHTTPStatusCode403Forbidden)
 	{
 		LogError("It seems that you got a <401> or <403> HTTP Status Code, which indicates that your Steam API Key isn't valid. Please verify the cvar nda_steamapi_key.");
 		return false;
 	}
-	if (iTries >= HTTP_REQUEST_RETRY_MAX)
+	if (iTries >= cvarHTTPRequestRetryMax.IntValue)
 		return false;
 	
 	return true;
