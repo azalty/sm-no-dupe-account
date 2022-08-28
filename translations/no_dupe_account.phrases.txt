@@ -84,6 +84,11 @@
 		"en"	"Accounts that are Community Banned are forbidden"
 	}
 	
+	"Kicked_Bans_Total"
+	{
+		"en"	"Accounts that have been VAC or Game Banned too many times are forbidden"
+	}
+	
 	"Kicked_Bans_Recent"
 	{
 		"en"	"You have been VAC or Game banned recently. As a security measure, you are not be able to join the server for now"

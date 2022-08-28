@@ -82,6 +82,11 @@
 		"fr"	"Les comptes bannis de la communauté Steam sont interdits"
 	}
 	
+	"Kicked_Bans_Total"
+	{
+		"fr"	"Les comptes qui ont été bannis par VAC ou de Jeux trop de fois sont interdits"
+	}
+	
 	"Kicked_Bans_Recent"
 	{
 		"fr"	"Vous avez été récemment VAC Ban ou Game Ban. Par mesure de sécurité, vous ne pouvez pas rejoindre le serveur pour le moment"
