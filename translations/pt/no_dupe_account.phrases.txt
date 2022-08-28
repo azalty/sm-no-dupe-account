@@ -13,12 +13,12 @@
 	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
 	"Kicked_PrivatePlaytime"
 	{
-		"pt"	"Deixe seu perfil steam e seu tempo de jogo público. Para alterar vá para as opções de privacidade do seu Perfil Steam"
+		"pt"	"Deixe seu Perfil Steam e seu tempo de jogo público. Para alterar vá para as opções de privacidade do seu Perfil Steam"
 	}
 	
 	"Kicked_PrivateProfile"
 	{
-		"pt"	"Deixe seu perfil steam público. Para alterar vá para as opções de privacidade do seu Perfil Steam"
+		"pt"	"Deixe seu Perfil Steam Público. Para alterar vá para as opções de privacidade do seu Perfil Steam"
 	}
 	
 	"Kicked_NotEnoughPlaytime"
@@ -80,6 +80,11 @@
 	"Kicked_Bans_Community"
 	{
 		"pt"	"Contas com Ban Comunidade são proibidas de se conectar ao servidor"
+	}
+	
+	"Kicked_Bans_Total"
+	{
+		"pt"	"Contas com vários VAC ou Game Ban são proibidas de se conectar ao servidor"
 	}
 	
 	"Kicked_Bans_Recent"
