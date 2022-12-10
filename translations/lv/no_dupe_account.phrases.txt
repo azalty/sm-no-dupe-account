@@ -1,0 +1,274 @@
+"Phrases"
+{
+	// ---------------------------------
+	// 			KICK MESSAGES
+	// ---------------------------------
+	
+	"Kicked_FailedChecks"
+	{
+		"lv"	"Tavs profils ir pārāk aizdomīgs un jauns, izmēģini pagaidām oficiālos serverus!"
+	}
+	
+	// If client has failed all his checks and has a private playtime (and playtime is a check), ask them to show it.
+	// This message will also be shown if nda_playtime is set to a negative number (kick player) and they have private playtime
+	"Kicked_PrivatePlaytime"
+	{
+		"lv"	"Tavam Steam profilam un nospēlētajam laikam jābut publiskam. Atjauno savus privacy uzstādījumus Steam Profilā"
+	}
+	
+	"Kicked_PrivateProfile"
+	{
+		"lv"	"Tavam Steam profilam jābūt publiskam. Atjauno savus privacy uzstādījumus Steam Profilā"
+	}
+	
+	"Kicked_NotEnoughPlaytime"
+	{
+		// {1} = time formatting, see category 'TIME FORMATTING' below for more info
+		// If you want, you can remove {1} and put your own phrase according to your config
+		"#format"	"{1:t}"
+		"lv"		"Tev jānospēlē CS:GO vismaz {1}, lai pievienotos serverim"
+	}
+	
+	"Kicked_NotEnoughSteamLevel"
+	{
+		// {1} = minimum level required
+		"#format"	"{1:i}"
+		"lv"		"Tavam Steam līmenim jābut vismaz {1}, lai pievienotos serverim"
+	}
+	
+	// Warning, you shouldn't kick for VPNs as these can cause false positives.
+	// A detection is done if the IP belongs to a corporation that doesn't give residential IPs
+	// AKA you can get a detection while you are at work OR if you are using an IP that is not from your home
+	// You can also get other false positives, but I didn't make this system so I'm not able to provide more infos
+	// -
+	// Players should also be free to play with VPNs, but we know that they are most of the time used for illegal stuff
+	// I do not recommend kicking for this or setting this as a check, since most of the people will NOT use a VPN and get on the server, and those who use them aren't always bad people!
+	// Just set it to 0 or 1 and you should be fine.
+	"Kicked_VPN"
+	{
+		"lv"	"Šajā serverī VPN lietot ir aizliegts, Atslēdz VPN lai pievienotos serverim"
+	}
+	
+	"Kicked_SteamAccountTooRecent"
+	{
+		"lv"	"Tavs Steam profils tika izveidots pārāk nesen. Drošības nolūkos tu pagaidām nevari pievienoties serverim"
+	}
+	
+	"Kicked_NoCoin"
+	{
+		"lv"	"Tev jāuzrāda COIN CS:GO profilā, lai pievienotos serverim"
+	}
+	
+	"Kicked_Bans_VAC"
+	{
+		"lv"	"Ar profilu kuram ir bijis VAC Bans, nevar pievienoties šajā serverī"
+	}
+	
+	"Kicked_Bans_VAC_multiple"
+	{
+		"lv"	"Ar profilu kuram ir bijuši vairāki VAC Bani, nevar pievienoties šajā serverī"
+	}
+	
+	"Kicked_Bans_Game"
+	{
+		"lv"	"Ar profilu kuram ir bijis Game Bans, nevar pievienoties šajā serverī"
+	}
+	
+	"Kicked_Bans_Game_multiple"
+	{
+		"lv"	"Ar profilu kuram ir bijuši vairāki Game Bani, nevar pievienoties šajā serverī"
+	}
+	
+	"Kicked_Bans_Community"
+	{
+		"lv"	"Ar Steam Community banotu profilu, nevar pievienoties šim serverim"
+	}
+	
+	"Kicked_Bans_Total"
+	{
+		"lv"	"Ar profilu kuram ir bijuši VAC Ban vai Game Ban vairākas reizes, nevar pievienoties šajā serverī"
+	}
+	
+	"Kicked_Bans_Recent"
+	{
+		"lv"	"Tu nesen saņēmi Game Ban vai Vac Banu. Drošības nolūkos tu pagaidām nevari pievienoties serverim"
+	}
+	
+	// ---------------------------------------
+	// 				NDA COMMAND
+	// ---------------------------------------
+	
+	"Command_NDA_NoMenu"
+	{
+		"lv"	"NDA menu nav pieejams, maini iestatījumus, lai tam varētu piekļūt."
+	}
+	
+	"Command_NDA_NonPrime"
+	{
+		"lv"	"Non-Prime"
+	}
+	
+	"Command_NDA_CommunityBans"
+	{
+		"lv"	"Community Bani"
+	}
+	
+	"Command_NDA_RecentBans"
+	{
+		"lv"	"Neseni Bani"
+	}
+	
+	"Command_NDA_PlayerDisconnected"
+	{
+		"lv"	"{darkred}[NDA] {lightblue}Oops, spēlētājs pameta serveri!"
+	}
+	
+	// ---------------------------------------
+	// 				VPN MESSAGES
+	// ---------------------------------------
+	
+	"SeemsUsingVPN"
+	{
+		// {1} = playername | {2} = IP
+		"#format"	"{1:s},{2:s}"
+		"lv"		"{darkred}[NDA] {blue}Spēlētājs {darkblue}{1}{blue} iespējams lieto VPN ar IP:{red}{2}"
+	}
+	
+	"Discord_SeemsUsingVPN"
+	{
+		// {client} = playername+link | {1} = IP
+		"#format"	"{1:s}"
+		"lv"		"Spēlētājs {client} iespējams lieto VPN ar IP: {1}"
+	}
+	
+	"Command_VPN_Title"
+	{
+		"lv"	"Spēlētāji kuriem ir iespējams VPN"
+	}
+	
+	"Command_VPN_Recheck"
+	{
+		"lv"	"Vēlreiz pārbaudīt spēlētāju IPs"
+	}
+	
+	"Command_VPN_NoVPN"
+	{
+		"lv"	"Izskatās ka neviens spēlētājs neizmanto VPN."
+	}
+	
+	// ---------------------------------------
+	// 				PRIME MESSAGES
+	// ---------------------------------------
+	
+	"Command_Prime_Title"
+	{
+		"lv"	"Non-Prime Spēlētāji"
+	}
+	
+	"Command_Prime_NoNonPrime"
+	{
+		"lv"	"Nav spēlētāju ar Non-Prime statusu"
+	}
+	
+	"IsNonPrime"
+	{
+		// {1} = playername
+		"#format"	"{1:s}"
+		"lv"		"{darkred}[NDA] {blue}Spēlētājam {darkblue}{1}{blue} nav {red}Prime statuss"
+	}
+	
+	// -------------------------------------------
+	// 				STEAM BAN MESSAGES
+	// -------------------------------------------
+	
+	"IsCommunityBanned"
+	{
+		// {1} = playername
+		"#format"	"{1:s}"
+		"lv"		"{darkred}[NDA] {blue}Spēlētājs {darkblue}{1}{blue} ir {red}community banots"
+	}
+	
+	"Discord_IsCommunityBanned"
+	{
+		// {clilvt} = playername+link
+		"lv"	"Spēlētājs {client} community banots"
+	}
+	
+	"Command_Bans_Community_Title"
+	{
+		"lv"	"Spēlētāji kuri ir Community Banoti"
+	}
+	
+	"Command_Bans_Community_NoBan"
+	{
+		"lv"	"Nav Community Banotu spēlētāju."
+	}
+	
+	"RecentlyBanned"
+	{
+		// {1} = playername | {2} = days ago
+		"#format"	"{1:s},{2:i}"
+		"lv"		"{darkred}[NDA] {blue}Spēlētājs {darkblue}{1}{blue} tika {red}VAC/Game banots pirms {2} dienas(ām)"
+	}
+	
+	"Discord_RecentlyBanned"
+	{
+		// {client} = playername+link | {1} = days ago
+		"#format"	"{1:i}"
+		"lv"		"Spēlētājs {client} tika VAC/Game banots pirms {1} dienas(ām)"
+	}
+	
+	"Command_Bans_Recent_Title"
+	{
+		"lv"	"Spēlētāji kuri nesen saņēmuši banu"
+	}
+	
+	"Command_Bans_Recent_Title"
+	{
+		"lv"	"Nav nesen banotu spēlētāju."
+	}
+	
+	// -----------------------------------------
+	//				TIME FORMATTING
+	// -----------------------------------------
+	
+	"Time_HoursAndMins"
+	{
+		// {1} = playtime in hours | {2} = playtime in minutes
+		"#format"	"{1:i},{2:i}"
+		"lv"		"{1} stundas un {2} minūtes"
+	}
+	
+	"Time_Hours"
+	{
+		// {1} = playtime in hours
+		"#format"	"{1:i}"
+		"lv"		"{1} stundas"
+	}
+	
+	"Time_Hour"
+	{
+		"lv"	"1 stunda"
+	}
+	
+	"Time_Mins"
+	{
+		// {1} = playtime in minutes
+		"#format"	"{1:i}"
+		"lv"		"{1} minūtes"
+	}
+	
+	// -------------------------------------------
+	//				DISCORD MESSAGES
+	// -------------------------------------------
+	
+	"Discord_Alert"
+	{
+		"lv"	"Brīdinājums:"
+	}
+	
+	"Discord_Server"
+	{
+		"lv"	"Server:"
+	}
+}
