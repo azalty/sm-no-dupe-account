@@ -105,7 +105,7 @@ These examples are all valid:
 - bool bExists
 - bool kick
 - char sBuffer[32]
-- char sBuffer[32]
+- char buffer[32]
 
 ## Try to avoid bracket nesting with returns
 
