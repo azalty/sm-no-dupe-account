@@ -54,7 +54,7 @@ if (this)
 Use tabulations (TAB) to do indentation.\
 Please never ever use spaces.
 
-Try to preserve intentation in empty lines:
+Try to preserve indentation in empty lines:
 
 :white_check_mark: Correct (select the text to see):
 ```
