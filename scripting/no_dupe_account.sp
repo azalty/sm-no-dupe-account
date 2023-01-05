@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.1"
+#define PLUGIN_VERSION "1.5.2 Beta 1"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -967,7 +967,7 @@ public void OnClientPostAdminCheck(int client)
 					else
 						CheckSteamLevel(client);
 				}
-				else if (cvarPlaytime.IntValue > 0)
+				else if (cvarSteamLevel.IntValue > 0)
 				{
 					g_iClientChecks[client]--;
 					ProcessChecks(client);
