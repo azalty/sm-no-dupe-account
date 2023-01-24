@@ -94,6 +94,11 @@
 		"en"	"You have been VAC or Game banned recently. As a security measure, you are not be able to join the server for now"
 	}
 	
+	"Kicked_NonPrime"
+	{
+		"en"	"You must have the Prime status to play on this server"
+	}
+	
 	// ---------------------------------------
 	// 				NDA COMMAND
 	// ---------------------------------------

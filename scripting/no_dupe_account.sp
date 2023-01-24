@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.2 Beta 1"
+#define PLUGIN_VERSION "1.5.2 Beta 2"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -107,7 +107,7 @@ public void OnPluginStart()
 	cvarDatabaseExpire = new Convar("nda_database_expire", "365", "(Requires Database)\nany integer = players values are deleted if older than X days (using refresh as well is recommended)\n0 = keep player values forever\nNOTE: Deleting really old values of players that don't play anymore is recommended");
 	cvarVPN = new Convar("nda_vpn", "1", "(Requires SteamWorks)\n0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
 	cvarLevel = new Convar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
-	cvarPrime = new Convar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players");
+	cvarPrime = new Convar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players\n3 = same as 1, but is not a check and will kick user (consider sv_prime_accounts_only instead)");
 	cvarPlaytime = new Convar("nda_playtime", "120", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if he has less mins in playtime than asked or has private hours\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarSteamLevel = new Convar("nda_steam_level", "5", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarSteamAge = new Convar("nda_steam_age", "1576800", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam account age is newer than this value in minutes or his profile is private\nany negative integer = same as positive, but is not a check and will kick user\n~integer (ex: ~60) = same as negative, but will not kick user if his profile is private");
@@ -915,30 +915,45 @@ public void OnClientPostAdminCheck(int client)
 			}
 		}
 		
-		if (cvarPrime.IntValue == 1)
+		switch (cvarPrime.IntValue)
 		{
-			if (IsClientWhitelisted(client, "prime"))
+			case 1:
 			{
-				g_iClientChecks[client]--;
-				ProcessChecks(client);
-			}
-			else
-			{
-				g_iClientChecksDone[client]++;
-				// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
-				if (g_bPrime[client] || (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense)) // if player is paid prime
+				if (IsClientWhitelisted(client, "prime"))
 				{
-					if (!g_bClientPassedCheck[client])
-						PassedCheck(client, "Is Prime");
-					g_bClientPassedCheck[client] = true;
-					g_bPrime[client] = true; // this will set Prime again if got through DB, but we don't care
+					g_iClientChecks[client]--;
+					ProcessChecks(client);
 				}
 				else
-					ProcessChecks(client);
+				{
+					g_iClientChecksDone[client]++;
+					// NOTE: This will only consider them as Prime if they bought the game. If they got it by going to Level 21, it won't work
+					if (g_bPrime[client] || (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense)) // if player is paid prime
+					{
+						if (!g_bClientPassedCheck[client])
+							PassedCheck(client, "Is Prime");
+						g_bClientPassedCheck[client] = true;
+						g_bPrime[client] = true; // this will set Prime again if got through DB, but we don't care
+					}
+					else
+						ProcessChecks(client);
+				}
+			}
+			case 2:
+			{
+				if (!g_bPrime[client] && (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense))
+					g_bPrime[client] = true;
+			}
+			case 3:
+			{
+				if (!g_bPrime[client] && !IsClientWhitelisted(client, "prime"))
+				{
+					g_bPrime[client] = SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense;
+					if (!g_bPrime[client])
+						KickClient(client, "%t", "Kicked_NonPrime");
+				}
 			}
 		}
-		else if ((cvarPrime.IntValue == 2) && !g_bPrime[client] && (SteamWorks_HasLicenseForApp(client, 624820) == k_EUserHasLicenseResultHasLicense))
-			g_bPrime[client] = true;
 		
 		if (g_bSteamAPIKeyAvailable)
 		{
