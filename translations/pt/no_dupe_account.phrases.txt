@@ -92,6 +92,11 @@
 		"pt"	"Você recebeu VAC/Game Ban recentemente. Como medida de segurança, você não pode se conectar ao servidor"
 	}
 	
+	"Kicked_NonPrime"
+	{
+		"pt"	"Você deve ter o Status Prime para jogar neste servidor"
+	}
+	
 	// ---------------------------------------
 	// 				NDA COMMAND
 	// ---------------------------------------
