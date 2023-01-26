@@ -94,6 +94,11 @@
 		"lv"	"Tu nesen saņēmi Game Ban vai Vac Banu. Drošības nolūkos tu pagaidām nevari pievienoties serverim"
 	}
 	
+	"Kicked_NonPrime"
+	{
+		"lv"	"Tev vajag Prime Upgrade statusu, lai spēlētu šajā serverī."
+	}
+	
 	// ---------------------------------------
 	// 				NDA COMMAND
 	// ---------------------------------------
