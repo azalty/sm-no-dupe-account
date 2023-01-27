@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.2 Beta 2"
+#define PLUGIN_VERSION "1.5.2 Beta 3"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -410,7 +410,7 @@ int VPNMenu(Menu menu, MenuAction action, int client, int itemNum)
 				char ip[20];
 				for (int i = 1; i <= MaxClients; i++)
 				{
-					if (IsClientInGame(i) && !IsFakeClient(i))
+					if (IsClientInGame(i) && !IsFakeClient(i) && !IsClientWhitelisted(i, "vpn"))
 					{
 						g_bVPN[i] = false;
 						GetClientIP(i, ip, sizeof(ip));
