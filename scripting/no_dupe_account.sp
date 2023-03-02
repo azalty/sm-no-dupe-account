@@ -8,7 +8,7 @@
 #include <steamworks>
 #include <discord>
 
-#define PLUGIN_VERSION "1.5.2 Beta 3"
+#define PLUGIN_VERSION "1.5.2"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -358,6 +358,7 @@ int NDAMenu(Menu menu, MenuAction action, int client, int itemNum)
 		case MenuAction_End:
 			delete menu;
 	}
+	return 0;
 }
 
 void InitVPNMenu(int client)
@@ -691,11 +692,12 @@ bool IsClientWhitelisted(int client, char[] method)
 		return true;
 	
 	// Check country code
-	char ccode[4]; // $XX and null terminator
+	char ccode[3]; // XX and null terminator
+	char ccode2[4]; // $XX and null terminator
 	if (!GeoipCode2(buffer, ccode))
 		strcopy(ccode, sizeof(ccode), "XX"); // no country found for this IP
-	Format(ccode, sizeof(ccode), "$%s", ccode);
-	if (IsIdentifierWhitelisted(ccode, method))
+	Format(ccode2, sizeof(ccode2), "$%s", ccode);
+	if (IsIdentifierWhitelisted(ccode2, method))
 		return true;
 	
 	// Check flags
@@ -1151,6 +1153,8 @@ Action Timer_CheckIP_Try(Handle timer, DataPack hDataTimer)
 	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
 	CheckIP_Try(hData, hDataTimer.ReadCell());
 	delete hDataTimer;
+	
+	return Plugin_Stop;
 }
 
 void OnCheckIPResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData, bool dontNotify)
@@ -1349,6 +1353,8 @@ Action Timer_CheckPlaytime_Try(Handle timer, DataPack hDataTimer)
 	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
 	CheckPlaytime_Try(hData, hDataTimer.ReadCell());
 	delete hDataTimer;
+	
+	return Plugin_Stop;
 }
 
 void OnCheckPlaytimeResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
@@ -1546,6 +1552,8 @@ Action Timer_CheckSteamLevel_Try(Handle timer, DataPack hDataTimer)
 	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
 	CheckSteamLevel_Try(hData, hDataTimer.ReadCell());
 	delete hDataTimer;
+	
+	return Plugin_Stop;
 }
 
 void OnCheckSteamLevelResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
@@ -1726,6 +1734,8 @@ Action Timer_CheckSteamAge_Try(Handle timer, DataPack hDataTimer)
 	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
 	CheckSteamAge_Try(hData, hDataTimer.ReadCell());
 	delete hDataTimer;
+	
+	return Plugin_Stop;
 }
 
 // sets iMode to the correct mode: 0 = positive, 1 = negative, 2 = '~'
@@ -1928,6 +1938,8 @@ Action Timer_CheckSteamBans_Try(Handle timer, DataPack hDataTimer)
 	DataPack hData = hDataTimer.ReadCell(); // Weird bug, for some reason this is required.
 	CheckSteamBans_Try(hData, hDataTimer.ReadCell());
 	delete hDataTimer;
+	
+	return Plugin_Stop;
 }
 
 void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, DataPack hData)
