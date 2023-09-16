@@ -7,8 +7,10 @@
 #undef REQUIRE_EXTENSIONS
 #include <steamworks>
 #include <discord>
+// Optional integrations with other plugins
+#include <vip_core> // https://github.com/R1KO/VIP-Core
 
-#define PLUGIN_VERSION "1.5.2"
+#define PLUGIN_VERSION "1.5.3 BETA 1"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -40,6 +42,7 @@ bool g_bSteamAPIKeyAvailable;
 bool g_bDiscordAvailable;
 bool g_bSteamworksExists;
 bool g_bDiscordExists;
+bool g_bR1KOVIPCoreExists;
 
 bool g_bSteamAgeEnabled;
 
@@ -82,6 +85,8 @@ Convar cvarLog;
 Convar cvarHTTPRequestTimeoutDelay;
 Convar cvarHTTPRequestRetryDelay;
 Convar cvarHTTPRequestRetryMax;
+Convar cvarReloadKVFile;
+Convar cvarIntegrationVIPCore;
 
 ConVar cvarHostname;
 
@@ -106,7 +111,7 @@ public void OnPluginStart()
 	cvarDatabaseRefresh = new Convar("nda_database_refresh", "1440", "(Requires Database)\nany integer = refresh players values if older than X minutes\n0 = never refresh (recommended if you don't plan on using the DB for other reasons)\nNOTE: Player values will ALWAYS refresh if they are denied, but this will NOT count as a true full refresh");
 	cvarDatabaseExpire = new Convar("nda_database_expire", "365", "(Requires Database)\nany integer = players values are deleted if older than X days (using refresh as well is recommended)\n0 = keep player values forever\nNOTE: Deleting really old values of players that don't play anymore is recommended");
 	cvarVPN = new Convar("nda_vpn", "1", "(Requires SteamWorks)\n0 = disabled\n1 = check for VPNs or proxies, and send an in-game alert to admins if someone is potentially using one (and a discord message if setup)\n2 = is a user check that fails is user has a VPN\n3 = kick user");
-	cvarLevel = new Convar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1");
+	cvarLevel = new Convar("nda_level", "2", "0 = disabled\nany integer = is a user check that fails if his level is under this value. Keep in mind if someone gets his service medal he will go back to level 1\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarPrime = new Convar("nda_prime", "1", "(Requires SteamWorks)\n0 = disabled\n1 = is a user check that fails if user is not prime (will only work if user paid the game) + nda menu\n2 = only add an !nda menu displaying non-prime players\n3 = same as 1, but is not a check and will kick user (consider sv_prime_accounts_only instead)");
 	cvarPlaytime = new Convar("nda_playtime", "120", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if he has less mins in playtime than asked or has private hours\nany negative integer = same as positive, but is not a check and will kick user");
 	cvarSteamLevel = new Convar("nda_steam_level", "5", "(Requires SteamAPI Key)\n0 = disabled\nany integer = is a user check that fails if his steam level is under this value or his profile is private\nany negative integer = same as positive, but is not a check and will kick user");
@@ -126,6 +131,8 @@ public void OnPluginStart()
 	cvarHTTPRequestTimeoutDelay = new Convar("nda_http_request_timeout_delay", "5", "Number of seconds before HTTP Requests timeout", _, true, 3.0);
 	cvarHTTPRequestRetryDelay = new Convar("nda_http_request_retry_delay", "5.0", "Number of seconds to wait before retrying an HTTP Request that failed\nYou probably shouldn't set this too low or too high", _, true, 1.0);
 	cvarHTTPRequestRetryMax = new Convar("nda_http_request_retry_max", "4", "Maximum amount of HTTP Request tries.\nIncludes the original try, so the minimum is 1. (Example: 4 = 1 try and 3 retries)", _, true, 1.0);
+	cvarReloadKVFile = new Convar("nda_reload_kvfile_mapchange", "1", "0 = only load NDA's KeyValues file on plugin start (less intensive)\n1 = reload the KeyValues file (in the sourcemod/configs/ folder) every map change (could cause more lag on map changes)", _, true, 0.0, true, 1.0);
+	cvarIntegrationVIPCore = new Convar("nda_integration_vipcore", "1", "If R1KO's VIP Core plugin is loaded, will delay verifications and wait for the VIP status verification.\nIf the plugin isn't loaded, this has no effect.", _, true, 0.0, true, 1.0);
 	
 	Convar.CreateConfig("no_dupe_account_advanced");
 	
@@ -145,11 +152,7 @@ public void OnPluginStart()
 	LoadTranslations("no_dupe_account.phrases");
 	
 	// Config
-	char kvPath[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, kvPath, sizeof(kvPath), "configs/no_dupe_account.cfg"); // Get cfg file
-	g_hConfig = new KeyValues("no_dupe_account");
-	if (!g_hConfig.ImportFromFile(kvPath))
-		SetFailState("Unable to import configs/no_dupe_account.cfg - make sure this config file exists!");
+	LoadNDAKeyValuesFile();
 	
 	// Cmds
 	RegAdminCmd("sm_checkmepls", Command_CheckMePls, ADMFLAG_ROOT, "Runs every check on you again and apply punishment if needed");
@@ -157,9 +160,22 @@ public void OnPluginStart()
 	RegAdminCmd("sm_nda", Command_NDA, ADMFLAG_BAN, "Opens the NDA menu with useful infos");
 }
 
+void LoadNDAKeyValuesFile()
+{
+	char kvPath[PLATFORM_MAX_PATH + 1];
+	BuildPath(Path_SM, kvPath, sizeof(kvPath), "configs/no_dupe_account.cfg"); // Get cfg file
+	g_hConfig = new KeyValues("no_dupe_account");
+	if (!g_hConfig.ImportFromFile(kvPath))
+		SetFailState("Unable to import configs/no_dupe_account.cfg - make sure this config file exists!");
+}
+
 public void OnConfigsExecuted()
 {
 	g_iChecks = 0;
+	
+	if (cvarReloadKVFile.BoolValue)
+		LoadNDAKeyValuesFile();
+	
 	cvarSteamAPIKey.GetString(g_sSteamAPIKey, sizeof(g_sSteamAPIKey));
 	cvarDiscord.GetString(g_sDiscordWebhook, sizeof(g_sDiscordWebhook));
 	cvarSteamAge.GetString(g_sSteamAge, sizeof(g_sSteamAge));
@@ -174,7 +190,7 @@ public void OnConfigsExecuted()
 	
 	if (cvarVPN.IntValue == 2)
 		g_iChecks++;
-	if (cvarLevel.BoolValue)
+	if (cvarLevel.IntValue > 0)
 		g_iChecks++;
 	if (cvarPrime.IntValue == 1)
 		g_iChecks++;
@@ -230,6 +246,7 @@ public void OnAllPluginsLoaded()
 {
 	g_bSteamworksExists = LibraryExists("SteamWorks");
 	g_bDiscordExists = LibraryExists("discord-api");
+	g_bR1KOVIPCoreExists = LibraryExists("vip_core");
 	
 	if (!g_bSteamworksExists && (cvarVPN.BoolValue || cvarPrime.BoolValue || cvarPlaytime.BoolValue || cvarSteamLevel.BoolValue || g_bDiscordAvailable || g_bSteamAgeEnabled || cvarBansVAC.BoolValue || cvarBansGame.BoolValue || cvarBansCommunity.BoolValue || cvarBansTotal.BoolValue || cvarBansRecent.BoolValue))
 		LogMessage("WARNING: Your current config requires the SteamWorks extension, and it is not installed. VPN, Prime, Playtime, Steam Level and Steam Bans modules will NOT work.");
@@ -243,6 +260,8 @@ public void OnLibraryAdded(const char[] name)
 		g_bSteamworksExists = true;
 	else if (StrEqual(name, "discord-api"))
 		g_bDiscordExists = true;
+	else if (StrEqual(name, "vip_core"))
+		g_bR1KOVIPCoreExists = true;
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -251,6 +270,8 @@ public void OnLibraryRemoved(const char[] name)
 		g_bSteamworksExists = false;
 	else if (StrEqual(name, "discord-api"))
 		g_bDiscordExists = false;
+	else if (StrEqual(name, "vip_core"))
+		g_bR1KOVIPCoreExists = false;
 }
 
 void OnSteamAPIKeyChange(ConVar convar, char[] oldValue, char[] newValue)
@@ -871,6 +892,16 @@ public void OnClientPostAdminCheck(int client)
 	if (IsFakeClient(client)) // exclude bots
 		return;
 	
+	if (cvarIntegrationVIPCore.BoolValue && g_bR1KOVIPCoreExists) // delay verification if R1KO's VIP Core plugin is loaded
+		return;
+	
+	VerifyClient(client);
+}
+
+// Main function to start verifying a client, called on OnClientPostAdminCheck
+void VerifyClient(int client)
+{
+	
 	if (cvarDatabase.BoolValue && !g_iClientDatabaseStatus[client] && g_bDatabaseReady)
 	{
 		CheckSQLPlayer(client);
@@ -879,7 +910,7 @@ public void OnClientPostAdminCheck(int client)
 	
 	if (cvarDatabase.BoolValue && cvarLog.IntValue == 3)
 	{
-		char buffer[360]; // that's a lot of space! :o (probably too much, but hey, I don't want to count)
+		char buffer[360]; // This should be enough
 		GetClientAuthId(client, AuthId_Steam2, buffer, sizeof(buffer));	
 		char sStatus[40];
 		SetDatabaseStatusString(g_iClientDatabaseStatus[client], sStatus, sizeof(sStatus));
@@ -1037,23 +1068,45 @@ Action Timer_GetResource(Handle timer, int client)
 	{
 		if (IsClientWhitelisted(client, "csgo_level"))
 		{
-			g_iClientChecks[client]--;
-			ProcessChecks(client);
+			if (cvarLevel.IntValue > 0)
+			{
+				g_iClientChecks[client]--;
+				ProcessChecks(client);
+			}
 		}
 		else
 		{
 			if (level > g_iClientDatabaseCSGOLevel[client])
 				g_iClientDatabaseCSGOLevel[client] = level;
 			
-			g_iClientChecksDone[client]++;
-			if (g_iClientDatabaseCSGOLevel[client] >= cvarLevel.IntValue)
+			int iLevelNeeded = cvarLevel.IntValue;
+			if (iLevelNeeded < 0)
+				iLevelNeeded = -iLevelNeeded;
+			
+			if (g_iClientDatabaseCSGOLevel[client] >= iLevelNeeded)
 			{
-				if (!g_bClientPassedCheck[client])
-					PassedCheck(client, "Enough CS:GO Level");
-				g_bClientPassedCheck[client] = true;
+				if (cvarLevel.IntValue > 0) // Is a check
+				{
+					g_iClientChecksDone[client]++;
+					if (!g_bClientPassedCheck[client])
+						PassedCheck(client, "Enough CS:GO Level");
+					g_bClientPassedCheck[client] = true;
+				}
 			}
 			else
-				ProcessChecks(client);
+			{
+				if (cvarLevel.IntValue > 0) // Is a check
+				{
+					g_iClientChecksDone[client]++;
+					ProcessChecks(client);
+				}
+				else // Not a check, but a kick method/requirement
+				{
+					/* Watch out! Service medals are NOT detected, so people CAN get under the specified CS:GO level even though they are technically higher level.
+					 * This is why this kick method/requirement isn't recommended. */
+					KickClient(client, "%t", "Kicked_NotEnoughCSGOLevel", iLevelNeeded);
+				}
+			}
 		}
 	}
 	
@@ -1061,8 +1114,11 @@ Action Timer_GetResource(Handle timer, int client)
 	{
 		if (IsClientWhitelisted(client, "csgo_coin"))
 		{
-			g_iClientChecks[client]--;
-			ProcessChecks(client);
+			if (cvarCoin.IntValue == 1)
+			{
+				g_iClientChecks[client]--;
+				ProcessChecks(client);
+			}
 		}
 		else
 		{
@@ -2346,6 +2402,15 @@ bool HTTPRequestFailMessage(char[] sRequestName, EHTTPStatusCode eStatusCode, in
 		return false;
 	
 	return true;
+}
+
+// R1KO's VIP Core plugin integration
+public void VIP_OnClientLoaded(int iClient, bool bIsVIP)
+{
+	if (!cvarIntegrationVIPCore.BoolValue)
+		return;
+	
+	VerifyClient(iClient);
 }
 
 /* THIS PART OF THE CODE IS LEFT UNTOUCHED, SINCE WE DON'T NEED IT AS OF NOW.
