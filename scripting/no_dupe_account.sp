@@ -10,7 +10,7 @@
 // Optional integrations with other plugins
 #include <vip_core> // https://github.com/R1KO/VIP-Core
 
-#define PLUGIN_VERSION "1.5.3 BETA 1"
+#define PLUGIN_VERSION "1.5.3 BETA 2"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -676,7 +676,7 @@ Action Command_CheckMePls(int client, int args)
 	if (client)
 	{
 		ResetClientVars(client);
-		OnClientPostAdminCheck(client);
+		VerifyClient(client);
 	}
 	return Plugin_Handled;
 }
@@ -901,7 +901,6 @@ public void OnClientPostAdminCheck(int client)
 // Main function to start verifying a client, called on OnClientPostAdminCheck
 void VerifyClient(int client)
 {
-	
 	if (cvarDatabase.BoolValue && !g_iClientDatabaseStatus[client] && g_bDatabaseReady)
 	{
 		CheckSQLPlayer(client);
@@ -2281,7 +2280,7 @@ void OnCheckSQLPlayer(Database db, DBResultSet results, const char[] error, any 
 	if (!results.RowCount || !results.FetchRow())
 	{
 		g_iClientDatabaseStatus[client] = 3; // doesn't exist
-		OnClientPostAdminCheck(client);
+		VerifyClient(client);
 		return;
 	}
 	
@@ -2295,7 +2294,7 @@ void OnCheckSQLPlayer(Database db, DBResultSet results, const char[] error, any 
 		Format(g_sSQLBuffer, sizeof(g_sSQLBuffer), "DELETE FROM players WHERE steamid = '%s'", steamid);
 		g_hDB.Query(SQL_NullCallback, g_sSQLBuffer);
 		g_iClientDatabaseStatus[client] = 3; // doesn't exist
-		OnClientPostAdminCheck(client);
+		VerifyClient(client);
 		return;
 	}
 	
@@ -2338,7 +2337,7 @@ void OnCheckSQLPlayer2(Database db, DBResultSet results, const char[] error, any
 	else
 		g_iClientDatabaseStatus[client] = 1;
 	
-	OnClientPostAdminCheck(client);
+	VerifyClient(client);
 }
 
 void InsertUpdatePlayer(int client, int csgo_level, int csgo_coin, bool prime, int csgo_playtime, int steam_level, int steam_age)
