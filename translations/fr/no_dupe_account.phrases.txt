@@ -34,6 +34,13 @@
 		"fr"		"Vous devez être au moins niveau {1} sur Steam pour vous connecter au serveur"
 	}
 	
+	"Kicked_NotEnoughCSGOLevel"
+	{
+		// {1} = minimum level required
+		"#format"	"{1:i}"
+		"fr"		"Vous devez être au moins niveau {1} pour vous connecter au serveur"
+	}
+	
 	// Warning, you shouldn't kick for VPNs as these can cause false positives.
 	// A detection is done if the IP belongs to a corporation that doesn't give residential IPs
 	// AKA you can get a detection while you are at work OR if you are using an IP that is not from your home
