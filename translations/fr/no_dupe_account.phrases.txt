@@ -38,7 +38,7 @@
 	{
 		// {1} = minimum level required
 		"#format"	"{1:i}"
-		"fr"		"Vous devez être au moins niveau {1} pour vous connecter au serveur"
+		"fr"		"Vous devez être au moins niveau {1} sur CSGO pour vous connecter au serveur"
 	}
 	
 	// Warning, you shouldn't kick for VPNs as these can cause false positives.
