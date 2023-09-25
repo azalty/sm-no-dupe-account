@@ -10,7 +10,7 @@
 // Optional integrations with other plugins
 #include <vip_core> // https://github.com/R1KO/VIP-Core
 
-#define PLUGIN_VERSION "1.5.3 BETA 2"
+#define PLUGIN_VERSION "1.6.0 BETA 1"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -37,6 +37,8 @@ bool g_bClientPrivateProfile[MAXPLAYERS + 1];
 bool g_bVPN[MAXPLAYERS + 1];
 bool g_bCommunityBanned[MAXPLAYERS + 1];
 bool g_bPrime[MAXPLAYERS + 1];
+bool g_bIsVerified[MAXPLAYERS + 1];
+bool g_bInVerification[MAXPLAYERS + 1];
 
 bool g_bSteamAPIKeyAvailable;
 bool g_bDiscordAvailable;
@@ -60,6 +62,14 @@ char g_sMethods[AMOUNT_METHODS][32];
 Handle g_hResourceTimer[MAXPLAYERS + 1];
 Database g_hDB;
 KeyValues g_hConfig;
+
+// Forwards
+
+GlobalForward g_fOnClientVerificationAsked;
+GlobalForward g_fOnClientVerificationStart;
+GlobalForward g_fOnClientVerificationDone;
+GlobalForward g_fOnClientRefused;
+GlobalForward g_fOnClientVerified;
 
 // Cvars
 
@@ -148,6 +158,14 @@ public void OnPluginStart()
 	cvarSteamAge.AddChangeHook(OnSteamAgeChange);
 	cvarHostname.AddChangeHook(OnHostnameChange);
 	
+	// Create forwards
+	
+	g_fOnClientVerificationAsked = new GlobalForward("NDA_OnClientVerificationAsked", ET_Hook, Param_Cell);
+	g_fOnClientVerificationStart = new GlobalForward("NDA_OnClientVerificationStart", ET_Ignore, Param_Cell);
+	g_fOnClientVerificationDone = new GlobalForward("NDA_OnClientVerificationDone", ET_Ignore, Param_Cell, Param_Cell);
+	g_fOnClientRefused = new GlobalForward("NDA_OnClientRefused", ET_Ignore, Param_Cell, Param_String);
+	g_fOnClientVerified = new GlobalForward("NDA_OnClientVerified", ET_Ignore, Param_Cell);
+	
 	// Translations
 	LoadTranslations("no_dupe_account.phrases");
 	
@@ -158,6 +176,14 @@ public void OnPluginStart()
 	RegAdminCmd("sm_checkmepls", Command_CheckMePls, ADMFLAG_ROOT, "Runs every check on you again and apply punishment if needed");
 	//RegAdminCmd("sm_vpn", Command_VPN, ADMFLAG_BAN, "Opens a menu to see if someone is potentially using a VPN");
 	RegAdminCmd("sm_nda", Command_NDA, ADMFLAG_BAN, "Opens the NDA menu with useful infos");
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("NDA_VerifyClient", Native_VerifyClient);
+	CreateNative("NDA_IsClientVerified", Native_IsClientVerified);
+	CreateNative("NDA_IsClientInVerification", Native_IsClientInVerification);
+	return APLRes_Success;
 }
 
 void LoadNDAKeyValuesFile()
@@ -659,6 +685,8 @@ void ResetClientVars(int client)
 	g_bVPN[client] = false;
 	g_bCommunityBanned[client] = false;
 	g_bPrime[client] = false;
+	g_bIsVerified[client] = false;
+	g_bInVerification[client] = false;
 	delete g_hResourceTimer[client];
 	
 	// DB
@@ -834,9 +862,8 @@ void CheckCountry(int client)
 		g_hConfig.GetString("command", command, sizeof(command), "sm_kick {userid} {reason}");
 		if (StrEqual(command, "sm_kick {userid} {reason}")) // if no command specified (default one), use KickClient()
 		{
+			NotifyVerificationDone(client, false, "Blacklisted country");
 			KickClient(client, buffer);
-			if (cvarLog.BoolValue)
-				LogMessage("Kicked %L (Blacklisted country)", client);
 			return;
 		}
 	}
@@ -859,8 +886,7 @@ void CheckCountry(int client)
 	Format(buffer, sizeof(buffer), "\"%s\"", buffer);
 	ReplaceString(command, sizeof(command), "{steamid}", buffer);
 	
-	if (cvarLog.BoolValue)
-		LogMessage("Refused %L (Blacklisted country)", client);
+	NotifyVerificationDone(client, false, "Blacklisted country");
 	ServerCommand(command);
 }
 
@@ -899,8 +925,27 @@ public void OnClientPostAdminCheck(int client)
 }
 
 // Main function to start verifying a client, called on OnClientPostAdminCheck
-void VerifyClient(int client)
+void VerifyClient(int client, bool force=false)
 {
+	// Call NDA_OnClientVerificationAsked
+	Call_StartForward(g_fOnClientVerificationAsked);
+	Call_PushCell(client);
+	Action aResult;
+	Call_Finish(aResult);
+	if (!force && (aResult == Plugin_Handled || aResult == Plugin_Stop))
+	{
+		return;
+	}
+	// No plugin refused the verification, let's continue!
+	
+	g_bInVerification[client] = true;
+	
+	// Call NDA_OnClientVerificationStart
+	Call_StartForward(g_fOnClientVerificationStart);
+	Call_PushCell(client);
+	Call_Finish();
+	
+	
 	if (cvarDatabase.BoolValue && !g_iClientDatabaseStatus[client] && g_bDatabaseReady)
 	{
 		CheckSQLPlayer(client);
@@ -1318,8 +1363,7 @@ void ProcessChecks(int client)
 		return;
 	if (!g_iClientChecks[client])
 	{
-		if (cvarLog.BoolValue)
-			LogMessage("Approved %L (Fully whitelisted, has no checks to pass)", client);
+		NotifyVerificationDone(client, false, "Fully whitelisted, has no checks to pass");
 		return;
 	}
 	
@@ -1327,22 +1371,19 @@ void ProcessChecks(int client)
 	{
 		if (g_bClientPrivatePlaytime[client])
 		{
-			if (cvarLog.BoolValue)
-				LogMessage("Refused %L (no check passed - private playtime)", client);
+			NotifyVerificationDone(client, false, "No check passed - private playtime");
 			
 			KickClient(client, "%t", "Kicked_PrivatePlaytime");
 		}
 		else if (g_bClientPrivateProfile[client])
 		{
-			if (cvarLog.BoolValue)
-				LogMessage("Refused %L (no check passed - private profile)", client);
+			NotifyVerificationDone(client, false, "No check passed - private profile");
 			
 			KickClient(client, "%t", "Kicked_PrivateProfile");
 		}
 		else
 		{
-			if (cvarLog.BoolValue)
-				LogMessage("Refused %L (no check passed)", client);
+			NotifyVerificationDone(client, false, "No check passed");
 			
 			KickClient(client, "%t", "Kicked_FailedChecks");
 		}
@@ -2148,8 +2189,11 @@ void OnCheckSteamBansResponse(Handle hRequest, bool bFailure, bool bRequestSucce
 
 void PassedCheck(int client, char[] reason)
 {
+	/*
 	if (cvarLog.IntValue == 1 || cvarLog.IntValue == 3)
 		LogMessage("Approved %L (%s)", client, reason);
+	*/
+	NotifyVerificationDone(client, true, reason);
 }
 
 void SendDiscordMessage(char[] title, char[] message, int client=0)
@@ -2403,6 +2447,46 @@ bool HTTPRequestFailMessage(char[] sRequestName, EHTTPStatusCode eStatusCode, in
 	return true;
 }
 
+void NotifyVerificationDone(int client, bool verified, const char[] reason = "")
+{
+	g_bInVerification[client] = false;
+	if (verified)
+		g_bIsVerified[client] = true;
+	
+	if (!verified && cvarLog.BoolValue)
+	{
+		if (strlen(reason))
+			LogMessage("Refused %L (%s)", client, reason);
+		else
+			LogMessage("Refused %L (no reason specified)", client);
+	}
+	else if (verified && (cvarLog.IntValue == 1 || cvarLog.IntValue == 3))
+	{
+		if (strlen(reason))
+			LogMessage("Approved %L (%s)", client, reason);
+		else
+			LogMessage("Approved %L (no reason specified)", client);
+	}
+	
+	Call_StartForward(g_fOnClientVerificationDone);
+	Call_PushCell(client);
+	Call_PushCell(verified);
+	Call_Finish();
+	
+	if (verified)
+	{
+		Call_StartForward(g_fOnClientVerified);
+		Call_PushCell(client);
+		Call_Finish();
+	}
+	else
+	{
+		Call_StartForward(g_fOnClientRefused);
+		Call_PushCell(client);
+		Call_Finish();
+	}
+}
+
 // R1KO's VIP Core plugin integration
 public void VIP_OnClientLoaded(int iClient, bool bIsVIP)
 {
@@ -2453,3 +2537,61 @@ void OnGetColumnsResponse(Database db, DBResultSet results, const char[] error, 
 	}	
 }
 */
+
+/**
+ * Asks NDA to verify a client. Will call NDA_OnClientVerificationAsked.
+ * Will not verify if the client is already in a verification.
+ * 
+ * @param client	A client index. Must be in game.
+ * @param mode		The mode to use.
+ * 0 = only verify if the client isn't verified yet (default)
+ * 1 = only verify if the client isn't verified yet, and ignore NDA_OnClientVerificationAsked's return value
+ * 2 = verify the client, even if they're already verified
+ * 3 = verify the client, even if they're already verified, and ignore NDA_OnClientVerificationAsked's return value
+ */
+any Native_VerifyClient(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	int mode = GetNativeCell(2);
+	
+	if (
+		!IsClientInGame(client) ||
+		IsFakeClient(client) ||
+		g_bInVerification[client] ||
+		(g_bIsVerified[client] && (mode == 0 || mode == 1)) 
+	   )
+	{
+		return 0;
+	}
+	
+	if (mode == 1 || mode == 3)
+		VerifyClient(client, true);
+	else
+		VerifyClient(client);
+	
+	return 0;
+}
+
+/**
+ * Returns whether or not a client is verified.
+ * 
+ * @param client	A client index. Must be in game.
+ * @return bool		true if the client is verified, false if not.
+ */
+any Native_IsClientVerified(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	return (IsClientInGame(client) && !IsFakeClient(client) && g_bIsVerified[client]);
+}
+
+/**
+ * Returns whether or not a client is being verified.
+ * 
+ * @param client	A client index. Must be in game.
+ * @return bool		true if the client is in verification, false if not.
+ */
+any Native_IsClientInVerification(Handle plugin, int numParams)
+{
+	int client = GetNativeCell(1);
+	return (IsClientInGame(client) && !IsFakeClient(client) && g_bInVerification[client]);
+}
