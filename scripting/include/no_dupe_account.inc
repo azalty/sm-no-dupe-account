@@ -30,6 +30,7 @@ public void __pl_no_dupe_account_SetNTVOptional()
 
 /**
  * Asks NDA to verify a client. Will call NDA_OnClientVerificationAsked.
+ * Will not verify if the client is already in a verification.
  * 
  * @param client	A client index. Must be in game.
  * @param mode		The mode to use.
