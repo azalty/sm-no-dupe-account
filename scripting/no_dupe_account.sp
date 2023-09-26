@@ -10,7 +10,7 @@
 // Optional integrations with other plugins
 #include <vip_core> // https://github.com/R1KO/VIP-Core
 
-#define PLUGIN_VERSION "1.6.0 BETA 1"
+#define PLUGIN_VERSION "1.6.0 BETA 2"
 
 #define AMOUNT_METHODS 14 // total amount of methods in the config file
 
@@ -183,6 +183,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("NDA_VerifyClient", Native_VerifyClient);
 	CreateNative("NDA_IsClientVerified", Native_IsClientVerified);
 	CreateNative("NDA_IsClientInVerification", Native_IsClientInVerification);
+	
+	RegPluginLibrary("no_dupe_account");
+	
 	return APLRes_Success;
 }
 
